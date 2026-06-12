@@ -1,0 +1,16 @@
+# Shell scripts must be LF — they run on Pi/WSL
+*.sh text eol=lf
+*.cmake text eol=lf
+CMakeLists.txt text eol=lf
+
+# C++ sources: normalize to LF
+*.cpp text eol=lf
+*.hpp text eol=lf
+*.h text eol=lf
+
+# Docs: LF
+*.md text eol=lf
+
+# Binary test fixtures
+*.pgm binary
+*.vhrs binary

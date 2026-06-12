@@ -1,0 +1,15 @@
+# Generated artifacts: routes, logs, keyframes, captures, active profile
+artifacts/
+
+# Build directories (desktop, Pi, attach-capable — all separate)
+build/
+build-*/
+
+# IDE
+.vscode/
+.idea/
+.cache/
+
+# OS
+Thumbs.db
+.DS_Store
