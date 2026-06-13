@@ -20,7 +20,7 @@ namespace vh {
 // ---------------------------------------------------------------------------
 
 struct HealthSnapshot;      // M2 (full def in vh/health.hpp)
-struct RouteMatch;          // M5/M7
+struct RouteMatch;          // M5/M7 (full def in vh/route_match.hpp)
 struct NavigationCommand;   // M7
 struct TelemetrySnapshot;   // M8
 struct GateDecision;        // M13

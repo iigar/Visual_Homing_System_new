@@ -7,8 +7,8 @@
 - [x] **M2** Preprocessing + health: block-average resize, HealthSnapshot, states, harness
 - [x] **M3** VHRS v1 route artifact: binary format, little-endian, integrity diagnostics, inspection CLI
 - [x] **M4** Route recording: RouteSignatureRecorder, CLI з replay
-- [ ] **M5** Route matching: Gray8 MAD matcher, direction error, illumination diagnostics
-- [ ] **M6** Route validation/quality: self-match, perturbation checks, distinctiveness, quality policy, checker script
+- [x] **M5** Route matching: Gray8 MAD matcher, direction error, illumination diagnostics
+- [x] **M6** Route validation/quality: self-match, perturbation checks, distinctiveness, quality policy, checker script
 - [ ] **M7** Navigation command model: RouteMatch, NavigationCommand, BoundedNavigator, yaw-rate-only
 - [ ] **M8** Read-only MAVLink telemetry: v1/v2 framing, heartbeat/attitude/altitude, untrusted input
 - [ ] **M9** Dry-run MAVLink boundary: DryRunCommandSink, bridge, stale telemetry blocking

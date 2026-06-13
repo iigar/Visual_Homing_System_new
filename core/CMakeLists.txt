@@ -10,6 +10,9 @@ add_library(vh_core STATIC
   src/route_io.cpp
   src/route_inspect.cpp
   src/route_recorder.cpp
+  src/direction_error.cpp
+  src/route_matcher.cpp
+  src/route_quality.cpp
 )
 target_include_directories(vh_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
@@ -32,3 +35,5 @@ vh_add_test(test_endian_digest)
 vh_add_test(test_route_io)
 vh_add_test(test_route_inspect)
 vh_add_test(test_route_recorder)
+vh_add_test(test_route_matcher)
+vh_add_test(test_route_quality)

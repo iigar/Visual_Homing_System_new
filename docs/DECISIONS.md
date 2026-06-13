@@ -27,6 +27,20 @@
 **Рішення:** всі 9 інтерфейсів стадій pipeline оголошені до першої реалізації.
 **Чому:** фіксує архітектуру до розповзання коду; майбутні датчики (thermal, rangefinder, VIO) підключаються за цими контрактами; кожна стадія мокається в тестах незалежно.
 
+### D-014: RouteMatch має integer і float representations (S3)
+**Рішення:** progress і confidence зберігаються і в integer mille (0..1000) і у float (0.0..1.0). Всі gates у matcher і навигаторі — на integer mille; float — лише display.
+**Чому:** D-007 (integer-only у hot paths) для bit-exact behaviour, але downstream (UI/web/Python tooling) очікують float. Дублювання — дешеве, читачі обирають свою репрезентацію.
+
+### D-015: Direction shift sign convention (S3)
+**Рішення:** `RouteMatch.direction_shift_px > 0` означає що live frame має контент який знаходиться ПРАВІШЕ у візуальному полі ніж у reference. Це той самий знак що параметр `s` у helper-функції `shift_horizontal(in, +s)`.
+**Чому:** один з двох тестів спочатку видавав протилежний знак — переплутана геометрія сигналу. Зафіксовано через explicit negation у `search_horizontal_shift` + детальний коментар у header.
+**How to apply:** при додаванні нових matcher backends (M5 fallback descriptors) — переконатись що вони використовують ту саму convention.
+
+### D-016: Quality policy thresholds per-deployment (S3)
+**Рішення:** дефолти QualityPolicy (low_texture_fraction ≤ 0.05, ambiguous_nearest ≤ 0.10, avg_nearest_mad ≥ 5, no duplicates) розраховані на 64×48 real-world frames. Синтетичні 8×8 тести можуть мати relaxed thresholds — це OK, бо це тести алгоритму, не виробничого порогу.
+**Чому:** малі patterns мають велику ambiguity природньо. Жорсткі production thresholds зробили б тести brittle на synthetic data, не давши користі.
+**How to apply:** перед M11/M12 (live capture на Pi) перевірити що default thresholds passуються на реальних 64×48 IMX219 кадрах; якщо ні — або thresholds слабші, або матчер потребує fallback descriptor (M5 future work).
+
 ### D-010: FNV-1a 64-bit для VHRS integrity diagnostics (S2)
 **Рішення:** header digest = FNV-1a low 32 bits над першими 12 байтами header'а; file digest = FNV-1a 64-bit над усім файлом, репортується у inspection report (не зберігається в файлі — це зовнішня діагностика).
 **Чому:** не криптографічний, але дає достатню роздільну здатність для виявлення випадкового пошкодження і простого локального tampering (1 byte flip → інший digest з ймовірністю ≈1). Промпт явно дозволяє це: "integrity diagnostics protect against accidental or local tampering but are not a complete cryptographic trust model unless signed metadata is later added".

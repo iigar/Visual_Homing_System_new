@@ -7,3 +7,4 @@ endfunction()
 
 vh_add_tool(vh_route_inspect)
 vh_add_tool(vh_route_record)
+vh_add_tool(vh_route_quality)

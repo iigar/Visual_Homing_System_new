@@ -2,6 +2,28 @@
 
 > Append-only. Новий запис зверху.
 
+## 2026-06-14 — S3: M5 + M6 (route matching + quality)
+
+**Зроблено (2 нових тести з 30 окремими test cases + 1 CLI tool + 1 checker script):**
+
+| Модуль | Тести / поведінка |
+|--------|-------------------|
+| `route_matcher` (M5) | sum_abs_diff identity/known, mad_confidence_mille extremes/midpoint, mean_gray8 uniform/halves, aligned match → confidence 1000, brightness offset без normalisation → low confidence, з normalisation → recovered, left/right shift → coherent direction_error, low-confidence → no direction emitted, dimension mismatch, window restricts search, empty route |
+| `direction_error` (M5) | aligned shift=0, find -2 offset, shift_px_to_millirad round half-up |
+| `route_quality` (M6) | self-match clean = exact, duplicates lose exactness, empty route; perturbation brightness with normalisation passes, malformed always rejected, low-amp noise keeps match; distinctiveness uniform = low texture, exact duplicates detected, diverse route passes, edge_trim excludes boundary; quality verdict pass for clean, fail for duplicates, fail for low-texture |
+| CLI/script | `vh_route_quality` stable key=value output; `check-route-quality-log.sh` readiness gate. End-to-end PASS: diverse route → quality_pass=true → checker pass. End-to-end FAIL: duplicate route → 4 explicit failures → checker fails correctly |
+
+**Архітектурні рішення (D-014…D-016):**
+- D-014: RouteMatch містить і integer mille і float repr — float тільки для display, всі gates на integer
+- D-015: Direction shift sign convention зафіксована: positive shift_px = live displaced RIGHT vs reference (відповідає параметру `s` у `shift_horizontal(in, +s)`)
+- D-016: Quality policy thresholds є per-deployment — у тестах з малими 8×8 patterns ambiguous threshold послаблюється; у виробництві (64×48) дефолти жорсткі
+
+**Пастки знайдені і виправлені:**
+- Sign mismatch між тестовим shift_horizontal і моїм direction kernel — узгодили через explicit negation
+- Synthetic 8×8 patterns мають високу ambiguity — для test зробив generator з різнішими seeds + явний chequerboard для "garbage" frame
+
+**Наступне:** S4 = M7 (BoundedNavigator: RouteMatch + HealthSnapshot → NavigationCommand yaw-rate-only).
+
 ## 2026-06-13 — S2: M3 + M4 (VHRS format + recording)
 
 **Зроблено (4 нові тести + 2 CLI tools, всі зелені):**
