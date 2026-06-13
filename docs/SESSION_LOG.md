@@ -2,6 +2,23 @@
 
 > Append-only. Новий запис зверху.
 
+## 2026-06-14 — S4: M7 (BoundedNavigator — navigation command model)
+
+**Зроблено (1 новий тест, 11 test cases; 14/14 CTest зелені):**
+
+| Модуль | Тести / поведінка |
+|--------|-------------------|
+| `navigation_command.hpp` (M7) | новий тип: integer-authoritative `yaw_rate_microradps` + float `yaw_rate_radps` projection; `vx_mps`/`vy_mps` hard-wired 0.0 |
+| `navigator` (M7) | bounding kernels (yaw_rate_from_error / clamp_symmetric / slew_limit) integer-exact + overflow-safe; happy path (err 100mrad × gain 500 → 50000 µrad/s, vx=vy=0); zero-forward-speed policy при великій помилці; gates: low confidence, stale match (+ future-stamp negative age + inclusive edge), invalid match, degraded health (non-Ready + кожен stage flag окремо), non-finite floats (NaN confidence / Inf progress / NaN health conf); clamp обмежує величезну помилку; slew ramps 30k→60k→90k→100k hold; reset-after-invalid обнуляє slew-памʼять, recovery стартує з 0 |
+
+**Архітектурні рішення (D-017, D-018):**
+- D-017: yaw rate integer-authoritative на microrad/s; `gain_milli` дає точний integer multiply `error_millirad × gain_milli`; float — display
+- D-018: будь-який провал гейта → zero invalid + reset slew-памʼяті; future-stamped match (negative age) відхиляється
+
+**Жодного CLI у M7** — навігаційний вивід прийде з DryRunCommandSink (M9). Жодних live-output опцій не торкався.
+
+**Наступне:** S5 = M8 (read-only MAVLink telemetry v1/v2) + M9 (dry-run MAVLink boundary).
+
 ## 2026-06-14 — S3: M5 + M6 (route matching + quality)
 
 **Зроблено (2 нових тести з 30 окремими test cases + 1 CLI tool + 1 checker script):**

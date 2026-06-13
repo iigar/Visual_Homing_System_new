@@ -13,6 +13,7 @@ add_library(vh_core STATIC
   src/direction_error.cpp
   src/route_matcher.cpp
   src/route_quality.cpp
+  src/navigator.cpp
 )
 target_include_directories(vh_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
@@ -37,3 +38,4 @@ vh_add_test(test_route_inspect)
 vh_add_test(test_route_recorder)
 vh_add_test(test_route_matcher)
 vh_add_test(test_route_quality)
+vh_add_test(test_navigator)

@@ -38,6 +38,18 @@
 
 ### D-016: Quality policy thresholds per-deployment (S3)
 **Рішення:** дефолти QualityPolicy (low_texture_fraction ≤ 0.05, ambiguous_nearest ≤ 0.10, avg_nearest_mad ≥ 5, no duplicates) розраховані на 64×48 real-world frames. Синтетичні 8×8 тести можуть мати relaxed thresholds — це OK, бо це тести алгоритму, не виробничого порогу.
+
+## 2026-06-14 — S4 (M7)
+
+### D-017: NavigationCommand yaw-rate integer-authoritative + bounding на microrad/s (S4)
+**Рішення:** `NavigationCommand.yaw_rate_microradps` (int32) — джерело істини; `yaw_rate_radps` (float) = microradps/1e6 як display projection. Уся bounding-математика (gain, clamp, slew) — на integer microrad/s. Gain виражений як `gain_milli` (gain×1000), тому `yaw_rate_microradps = direction_error_millirad × gain_milli` — точний integer multiply (фактори 1e-3·1e6·1e3 скорочуються).
+**Чому:** D-007 (integer-only hot paths) для bit-exact між desktop і Pi; D-014 патерн (integer + float dual). `vx_mps`/`vy_mps` структурно присутні, але hard-wired 0.0 — yaw-rate-only scope до ревью.
+**How to apply:** M9 (DryRunCommandSink) і M17 (MAVLink encoder) читають `yaw_rate_microradps` для bit-exact логування; float — лише для людино-читабельного виводу.
+
+### D-018: BoundedNavigator скидає slew-памʼять на будь-якому провалі гейта (S4)
+**Рішення:** будь-який провал з 6 гейтів (health Ready, stage flags, valid match, finite floats, min confidence, match age ∈ [0, max]) → zero invalid command + `last_yaw_rate=0`. Відновлення завжди стартує з нуля, не відновлює застарілу швидкість.
+**Чому:** fail-closed posture з промпту ("invalid input → zero command"); відновлення з накопиченого rate після провалу health/match — небезпечно. Future-stamped match (negative age) теж відхиляється як nonsensical.
+**How to apply:** будь-який майбутній navigator backend має дотримуватись цього reset-on-fail контракту; тести покривають reset-after-invalid явно.
 **Чому:** малі patterns мають велику ambiguity природньо. Жорсткі production thresholds зробили б тести brittle на synthetic data, не давши користі.
 **How to apply:** перед M11/M12 (live capture на Pi) перевірити що default thresholds passуються на реальних 64×48 IMX219 кадрах; якщо ні — або thresholds слабші, або матчер потребує fallback descriptor (M5 future work).
 
