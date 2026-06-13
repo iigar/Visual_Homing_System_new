@@ -3,8 +3,8 @@
 > Чекбокс = milestone завершений: тести зелені, коміт зроблений, docs оновлені.
 
 - [x] **S0** Bootstrap: repo skeleton, CMake safety options, interfaces, перший тест
-- [ ] **M1** Replay input: Frame, CSV manifest, PGM P5 Gray8, тести
-- [ ] **M2** Preprocessing + health: block-average resize, HealthSnapshot, states, harness
+- [x] **M1** Replay input: Frame, CSV manifest, PGM P5 Gray8, тести
+- [x] **M2** Preprocessing + health: block-average resize, HealthSnapshot, states, harness
 - [ ] **M3** VHRS v1 route artifact: binary format, little-endian, integrity diagnostics, inspection CLI
 - [ ] **M4** Route recording: RouteSignatureRecorder, CLI з replay
 - [ ] **M5** Route matching: Gray8 MAD matcher, direction error, illumination diagnostics
