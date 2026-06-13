@@ -7,6 +7,9 @@ add_library(vh_core STATIC
   src/replay_camera.cpp
   src/preprocess.cpp
   src/health.cpp
+  src/route_io.cpp
+  src/route_inspect.cpp
+  src/route_recorder.cpp
 )
 target_include_directories(vh_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
@@ -25,3 +28,7 @@ vh_add_test(test_replay_camera)
 vh_add_test(test_preprocess)
 vh_add_test(test_health)
 vh_add_test(test_pipeline_harness)
+vh_add_test(test_endian_digest)
+vh_add_test(test_route_io)
+vh_add_test(test_route_inspect)
+vh_add_test(test_route_recorder)

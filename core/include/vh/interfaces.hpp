@@ -10,6 +10,7 @@
 #include <string>
 
 #include "vh/frame.hpp"
+#include "vh/route_entry.hpp"  // M3 type used by IRoute{Writer,Reader}
 
 namespace vh {
 
@@ -18,8 +19,7 @@ namespace vh {
 // interface contracts are complete from day one).
 // ---------------------------------------------------------------------------
 
-struct HealthSnapshot;      // M2
-struct RouteEntry;          // M3
+struct HealthSnapshot;      // M2 (full def in vh/health.hpp)
 struct RouteMatch;          // M5/M7
 struct NavigationCommand;   // M7
 struct TelemetrySnapshot;   // M8

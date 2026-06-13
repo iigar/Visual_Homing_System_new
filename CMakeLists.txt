@@ -42,3 +42,4 @@ add_compile_options(-Wall -Wextra -Wpedantic -Werror)
 
 enable_testing()
 add_subdirectory(core)
+add_subdirectory(tools)

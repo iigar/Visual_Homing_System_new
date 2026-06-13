@@ -5,8 +5,8 @@
 - [x] **S0** Bootstrap: repo skeleton, CMake safety options, interfaces, перший тест
 - [x] **M1** Replay input: Frame, CSV manifest, PGM P5 Gray8, тести
 - [x] **M2** Preprocessing + health: block-average resize, HealthSnapshot, states, harness
-- [ ] **M3** VHRS v1 route artifact: binary format, little-endian, integrity diagnostics, inspection CLI
-- [ ] **M4** Route recording: RouteSignatureRecorder, CLI з replay
+- [x] **M3** VHRS v1 route artifact: binary format, little-endian, integrity diagnostics, inspection CLI
+- [x] **M4** Route recording: RouteSignatureRecorder, CLI з replay
 - [ ] **M5** Route matching: Gray8 MAD matcher, direction error, illumination diagnostics
 - [ ] **M6** Route validation/quality: self-match, perturbation checks, distinctiveness, quality policy, checker script
 - [ ] **M7** Navigation command model: RouteMatch, NavigationCommand, BoundedNavigator, yaw-rate-only

@@ -1,0 +1,9 @@
+# Command-line tools that link against vh_core.
+
+function(vh_add_tool name)
+  add_executable(${name} ${name}.cpp)
+  target_link_libraries(${name} PRIVATE vh_core)
+endfunction()
+
+vh_add_tool(vh_route_inspect)
+vh_add_tool(vh_route_record)

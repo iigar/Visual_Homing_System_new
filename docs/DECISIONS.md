@@ -27,6 +27,25 @@
 **Рішення:** всі 9 інтерфейсів стадій pipeline оголошені до першої реалізації.
 **Чому:** фіксує архітектуру до розповзання коду; майбутні датчики (thermal, rangefinder, VIO) підключаються за цими контрактами; кожна стадія мокається в тестах незалежно.
 
+### D-010: FNV-1a 64-bit для VHRS integrity diagnostics (S2)
+**Рішення:** header digest = FNV-1a low 32 bits над першими 12 байтами header'а; file digest = FNV-1a 64-bit над усім файлом, репортується у inspection report (не зберігається в файлі — це зовнішня діагностика).
+**Чому:** не криптографічний, але дає достатню роздільну здатність для виявлення випадкового пошкодження і простого локального tampering (1 byte flip → інший digest з ймовірністю ≈1). Промпт явно дозволяє це: "integrity diagnostics protect against accidental or local tampering but are not a complete cryptographic trust model unless signed metadata is later added".
+**Альтернатива:** SHA-256 (200 рядків, важче, повільніше; немає захисту без підпису ключем). Залишено на майбутнє hardening разом з підписом.
+
+### D-011: VHRS v1 layout (S2)
+**Рішення:** 32-byte file header (magic+version+flags+entry_count+header_digest+16 reserved zero) + per-entry 40-byte header (frame_id u64, timestamp_ns i64, altitude_mm u32, heading_millirad i32, width u32, height u32, pixel_format u16, reserved u16, payload_length u32) + payload.
+**Чому:** все integer-only (D-007), LE, фіксовані розміри для passable forwards-compat (reserved field), payload_length жорстко перевіряється через width×height×bytes_per_pixel — клієнт не може записати inconsistent entry.
+**Hard caps:** 8192 px dim, 16MB payload, 1M entries — refuse до allocation.
+
+### D-012: Integer altitude/heading метадані (S2)
+**Рішення:** altitude — u32 mm (0xFFFFFFFF = unknown), heading — i32 milliradians (INT32_MIN = unknown).
+**Чому:** integer-only (D-007), достатня точність для coarse route metadata (1mm altitude, ~0.057° heading), bit-exact між platforms, sentinel-friendly.
+**Альтернатива:** f32 — потенційні denormal/NaN issues, не bit-exact між x86 і ARM з різними FP settings.
+
+### D-013: Test helper — template instead of bool param (S2)
+**Рішення:** `expect<T>(const T& value, ...)` замість `expect(bool, ...)` — використовує `static_cast<bool>()` всередині.
+**Чому:** дозволяє `std::optional`, smart pointers, custom RAII guards без `.has_value()`/`.get()` boilerplate. Запобігає implicit narrowing помилкам коли тип має explicit operator bool.
+
 ### D-007: Integer-only math у hot paths (S1)
 **Рішення:** block-average resize, MAD matcher (M5), digest math — без floating-point. Тільки `uint64_t` суми, integer division з half-block rounding.
 **Чому:** GCC 13 на x86 і GCC 14 на ARM Cortex-A53 можуть мати різну FP rounding для denormals; integer arithmetic — bit-exact. Critical для reproducibility 3/3 evidence logs.

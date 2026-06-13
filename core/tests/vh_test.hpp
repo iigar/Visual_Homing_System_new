@@ -11,8 +11,13 @@ namespace vh::test {
 
 inline int failures = 0;
 
-inline void expect(bool condition, const char* expr, const char* file, int line) {
-  if (!condition) {
+// Template form accepts anything contextually convertible to bool
+// (std::optional, smart pointers, etc.). Implicit narrowing to bool would
+// reject explicit-operator-bool types like std::optional.
+template <typename T>
+inline void expect(const T& value, const char* expr, const char* file,
+                   int line) {
+  if (!static_cast<bool>(value)) {
     ++failures;
     std::fprintf(stderr, "FAIL %s:%d  %s\n", file, line, expr);
   }

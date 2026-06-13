@@ -2,6 +2,31 @@
 
 > Append-only. Новий запис зверху.
 
+## 2026-06-13 — S2: M3 + M4 (VHRS format + recording)
+
+**Зроблено (4 нові тести + 2 CLI tools, всі зелені):**
+
+| Модуль | Тести / поведінка |
+|--------|-------------------|
+| `endian` + `digest` | LE roundtrip u16/u32/u64/signed, FNV-1a відомі RFC значення ("", "a", "foobar"), streaming = oneshot, single-bit flip detection |
+| `route_io` (VHRS v1) | round-trip 3 entries, reject invalid/oversized, bad magic, short file, wrong version (with valid digest), header digest tamper detection, post-finalize truncation, trailing bytes, file digest detects payload flip, unsupported pixel format, already-finalized writer, unknown metadata roundtrip, empty route |
+| `route_inspect` | uniform route з 5 entries: dimensions, monotonicity, altitude/heading min/max ranges, stable key=value text output |
+| `route_recorder` | 3-frame round-trip з PoseHint, invalid frame counted as rejected, record after finalize refused, unknown pose round-trip |
+| CLI end-to-end | 5 PGM 8x8 → manifest → `vh_route_record --target 4x4` → `vh_route_inspect` (`record_ok=true`, всі поля коректно)|
+
+**Архітектурні рішення:**
+- D-010: FNV-1a 64-bit (NOT cryptographic) для VHRS integrity diagnostics. Sufficient для виявлення випадкового пошкодження і простого локального tampering. Криптографічна довіра потребує signed metadata (відкладено).
+- D-011: VHRS = 32-byte file header + 40-byte entry header, всі multi-byte LE. Header містить magic+version+flags+entry_count+header_digest (12 bytes covered) + 16 reserved zero bytes.
+- D-012: Integer-only metadata: altitude_mm (u32), heading_millirad (i32). Sentinel values для unknown.
+- D-013: Test helper тепер templated — приймає будь-що contextually convertible to bool.
+
+**Пастки знайдені і виправлені:**
+- Забутий `#include <limits>` для `numeric_limits<T>::min()`
+- `std::optional` як аргумент implicit-bool помічника
+- Test файли не інклюдять headers які використовують напряму (через interfaces.hpp їх не вистачає)
+
+**Наступне:** S3 = M5 (Gray8RouteMatcher + direction error) + M6 (route quality policy + checker script).
+
 ## 2026-06-13 — S1: M1 + M2 (replay input + preprocessing + health)
 
 **Зроблено (7 нових тестів, всі зелені):**
