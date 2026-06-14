@@ -67,6 +67,18 @@
 ### D-021: telemetry freshness → mavlink_ok через clock injection (S5)
 **Рішення:** `MavlinkTelemetry.update(now_ns)` рахує age кожного повідомлення; `mavlink_ok = heartbeat_seen && age ∈ [0, max_heartbeat_age_ns]` (дефолт 2с). Negative age (future timestamp) → not ok (fail-closed). Той самий clock-injection патерн що HealthMonitor (D-008). HealthMonitor.set_mavlink_ok споживає цей bool на рівні orchestrator.
 **Чому:** stale/missing heartbeat має одразу ронити link health; детермінований годинник для відтворюваних тестів.
+
+## 2026-06-15 — M9
+
+### D-022: DryRunCommandSink — fail-closed command boundary, stopped-by-default, single-writer (M9)
+**Рішення:** `DryRunCommandSink` (ICommandSink) НІКОЛИ не передає — `send()` лише пише в bounded ring history + лічильники. Stopped за замовчуванням: `send()` відхиляється до `start()`. Single-writer: `start()` успішний тільки зі stopped стану, повторний → false. Bounded retention (ring, дефолт 64) + all-time `seq` зберігається навіть коли старі записи витіснені.
+**Чому:** промпт — live MAVLink output недоступний і fail-closed до M16/M17 після ревью. Dry-run sink — це безпечний замінник writer-а; історія потрібна для аудиту, stopped-by-default + single-writer моделюють боротьбу за єдиний writer.
+**How to apply:** M13 AuditLog/SafetyGate підключаються тут; реальний writer (M17) має той самий ICommandSink контракт, але дефолтні білди лишаються на DryRunCommandSink.
+
+### D-023: DryRunBridge накладає telemetry freshness/compatibility на command validity (M9)
+**Рішення:** `DryRunBridge.tick(match, base_health, now)` оновлює telemetry, бере snapshot, і накладає на health: `eff.mavlink_ok = ts.mavlink_ok && !incompatible`. Stale heartbeat або incompatible FC (disarmed коли `require_armed`) → mavlink_ok false → navigator gate відмовляє valid command. Команда (valid чи zero/invalid) йде в DryRunCommandSink. Лічильники: ticks, blocked_stale, blocked_incompatible, commands_valid/invalid.
+**Чому:** промпт — "do not generate valid command proposals when FC state is stale or incompatible". Перевикористовує існуючий navigator mavlink_ok gate замість дублювання логіки.
+**How to apply:** реальний orchestrator (post-M13) робить те саме: telemetry → health overlay → navigator → sink. Bridge НЕ відкриває MAVLink writer — boundary fail-closed.
 **Чому:** малі patterns мають велику ambiguity природньо. Жорсткі production thresholds зробили б тести brittle на synthetic data, не давши користі.
 **How to apply:** перед M11/M12 (live capture на Pi) перевірити що default thresholds passуються на реальних 64×48 IMX219 кадрах; якщо ні — або thresholds слабші, або матчер потребує fallback descriptor (M5 future work).
 

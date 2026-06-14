@@ -2,6 +2,23 @@
 
 > Append-only. Новий запис зверху.
 
+## 2026-06-15 — M9 (dry-run MAVLink boundary)
+
+**Зроблено (2 шари, 2 нові тести +11 cases; 18/18 CTest зелені):**
+
+| Шар | Що |
+|-----|-----|
+| `command_sink.{hpp,cpp}` | DryRunCommandSink (ICommandSink): start/stop, stopped-by-default reject, single-writer (start вдруге → false), bounded ring history (дефолт 64) + counters (accepted/accepted_valid/rejected_stopped), all-time seq. НІЧОГО не передає |
+| `dry_run_bridge.{hpp,cpp}` | DryRunBridge: MavlinkTelemetry + BoundedNavigator + sink. tick() накладає telemetry freshness/compat на health → stale/incompatible FC = navigator відмовляє valid command. Counters: ticks/blocked_stale/blocked_incompatible/commands_valid/invalid. telemetry() expose armed/mode/attitude/rel-alt |
+
+**Тести:** test_command_sink (5: stopped-reject, single-writer, record+count, bounded-drop-oldest, stop-then-reject), test_dry_run_bridge (6: telemetry polling, fresh→valid, stale blocks, never-heartbeat blocks, disarmed+require_armed→incompatible, sink-stopped→rejects-record).
+
+**Архітектурні рішення:** D-022 (fail-closed command boundary, stopped-by-default, single-writer), D-023 (bridge накладає telemetry freshness на command validity через існуючий navigator gate).
+
+**Live MAVLink output лишається недоступним і fail-closed.** Жодних live-output опцій не торкався.
+
+**Наступне:** M10 (camera profiles — FOV, ground footprint, rad-per-pixel для matcher direction error, IMX219 профіль, JSON для UI/API).
+
 ## 2026-06-14 — S5: M8 (read-only MAVLink telemetry)
 
 **Зроблено (3 шари, 2 нові тести +19 cases, 1 CLI, 2 Pi-скрипти; 16/16 CTest зелені):**

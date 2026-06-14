@@ -16,6 +16,8 @@ add_library(vh_core STATIC
   src/navigator.cpp
   src/mavlink.cpp
   src/telemetry.cpp
+  src/command_sink.cpp
+  src/dry_run_bridge.cpp
 )
 target_include_directories(vh_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
@@ -43,3 +45,5 @@ vh_add_test(test_route_quality)
 vh_add_test(test_navigator)
 vh_add_test(test_mavlink)
 vh_add_test(test_telemetry)
+vh_add_test(test_command_sink)
+vh_add_test(test_dry_run_bridge)
