@@ -4,10 +4,13 @@
 # committed state.
 #
 # Idempotent: each doc is keyed by its basename as the source title. A re-sync
-# first deletes every prior source carrying that title, then adds the current
-# file once — so repeated milestone syncs replace the doc instead of piling up
-# duplicate copies. (The earlier version called `source add` unconditionally,
-# which left N stale copies after N milestones.)
+# deletes EVERY existing source carrying that title (matched from `source list
+# --json`, removed by ID) and then adds the current file once — so repeated
+# milestone syncs replace the doc instead of piling up duplicate copies.
+#
+# Why delete by ID and not `delete-by-title`: the CLI's delete-by-title
+# deliberately refuses when a title matches more than one source ("Delete by ID
+# instead", exit 1), which is exactly the duplicate case we need to clean up.
 #
 # Runs via Git Bash on Windows: `python` + the `notebooklm` package live on the
 # Windows side, NOT in WSL (WSL has neither). Do not invoke through `wsl`.
@@ -24,12 +27,17 @@ fi
 for path in "$@"; do
   title="$(basename "$path")"
   echo "=== $title ==="
-  # Remove every existing copy with this title. delete-by-title exits non-zero
-  # once no source matches, which ends the loop (and is the expected state on a
-  # first-ever sync). A non-"not found" failure also just ends the loop; the
-  # subsequent `add` will surface the real error.
-  while python -m notebooklm source delete-by-title "$title" -y >/dev/null 2>&1; do
-    :
+
+  # Collect IDs of every existing source whose exact title equals this file's
+  # basename. One list call per file keeps the logic simple; the notebook is
+  # small. A non-zero list (e.g. transient auth) yields no IDs -> we just add.
+  ids="$(python -m notebooklm source list --json 2>/dev/null \
+    | python -c "import sys,json;d=json.load(sys.stdin);[print(s['id']) for s in d.get('sources',[]) if s.get('title')==sys.argv[1]]" \
+      "$title" 2>/dev/null || true)"
+
+  for id in $ids; do
+    python -m notebooklm source delete "$id" -y >/dev/null 2>&1 || true
   done
+
   python -m notebooklm source add "$path" --title "$title"
 done
