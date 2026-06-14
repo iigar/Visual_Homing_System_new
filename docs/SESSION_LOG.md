@@ -2,6 +2,26 @@
 
 > Append-only. Новий запис зверху.
 
+## 2026-06-14 — S5: M8 (read-only MAVLink telemetry)
+
+**Зроблено (3 шари, 2 нові тести +19 cases, 1 CLI, 2 Pi-скрипти; 16/16 CTest зелені):**
+
+| Шар | Що |
+|-----|-----|
+| `mavlink.{hpp,cpp}` | byte-streaming parser v1(0xFE)/v2(0xFD); CRC-16/MCRF4XX + per-msg CRC_EXTRA; state machine; counters (bytes_seen/frames_ok/crc_error/unknown_msgid/bytes_discarded); v2 signed-frame consume; deferred emit через pending_ буфер |
+| `telemetry.{hpp,cpp}` | декодери HEARTBEAT/ATTITUDE/GLOBAL_POSITION_INT; TelemetrySnapshot; copter mode labels; armed з base_mode&0x80; MavlinkTelemetry (ITelemetrySource) з expected_sysid фільтром; freshness→mavlink_ok через update(now) |
+| `tools/vh_mavlink_inspect` + `mavlink-capture.sh` + `mavlink-inspect.sh` | CLI читає stdin → stable key=value; Pi серійний capture (/dev/serial0 @115200, READ-ONLY) + inspect wrapper |
+
+**Тести:** test_mavlink (10: v1/v2 roundtrip, truncation, CRC/payload corruption reject, unknown msgid, garbage resync, partial, signed consume, back-to-back), test_telemetry (9: armed/mode, disarmed/unknown, freshness stale, future fail-closed, attitude, position, wrong-sysid filter, CRC-fail no-update, mixed stream).
+
+**Крос-валідація (NotebookLM був down):** незалежна Python-реалізація CRC будує кадри → C++ парсер приймає (crc_error=0) і декодує правильно. Підтверджено CRC_EXTRA 50/39/104 + offsets для всіх 3 повідомлень. End-to-end demo через vh_mavlink_inspect.
+
+**Архітектурні рішення (D-019…D-021):** untrusted input + обовʼязковий CRC; крос-валідація замість notebook; freshness→mavlink_ok через clock injection.
+
+**Інфра-нотатки:** dedup notebook-add-doc.sh (delete-by-ID), Stop-hook anti-loop (stop_hook_active), очистка диску C: (+10GB; видалення ms-playwright тимчасово зламало notebook login — відновлено `playwright install chromium`). NotebookLM Google-сесія протухає ~10хв.
+
+**Наступне:** S5 продовження = M9 (DryRunCommandSink + dry-run MAVLink bridge, stale-telemetry blocking, compact log).
+
 ## 2026-06-14 — S4: M7 (BoundedNavigator — navigation command model)
 
 **Зроблено (1 новий тест, 11 test cases; 14/14 CTest зелені):**

@@ -50,6 +50,22 @@
 **Рішення:** будь-який провал з 6 гейтів (health Ready, stage flags, valid match, finite floats, min confidence, match age ∈ [0, max]) → zero invalid command + `last_yaw_rate=0`. Відновлення завжди стартує з нуля, не відновлює застарілу швидкість.
 **Чому:** fail-closed posture з промпту ("invalid input → zero command"); відновлення з накопиченого rate після провалу health/match — небезпечно. Future-stamped match (negative age) теж відхиляється як nonsensical.
 **How to apply:** будь-який майбутній navigator backend має дотримуватись цього reset-on-fail контракту; тести покривають reset-after-invalid явно.
+
+## 2026-06-14 — S5 (M8)
+
+### D-019: Власний read-only MAVLink parser, CRC-валідація обовʼязкова, untrusted input (S5)
+**Рішення:** byte-streaming state machine для v1(0xFE)/v2(0xFD). Кадр НІКОЛИ не довіряється без перевірки CRC-16/MCRF4XX з per-message CRC_EXTRA. Unknown msgid (немає CRC_EXTRA) → не емітиться, рахується окремо (`frames_unknown_msgid`), payload споживається структурно щоб не розсинхронити стрім. v2 signed: 13-байтовий підпис споживається але НЕ перевіряється (read-only telemetry). Опційний `expected_sysid` фільтр відкидає чужий трафік. Парсер НЕ продукує команд.
+**Чому:** промпт — UART telemetry = untrusted input; malformed/injected/wrong-sysid/stale не мають створювати command permission. CRC+CRC_EXTRA — єдиний надійний gate проти сміття.
+**How to apply:** M9 dry-run bridge і M13 SafetyGate читають `TelemetrySnapshot.mavlink_ok`; ніколи не давати permission на основі некрос-перевіреного кадру.
+
+### D-020: MAVLink CRC_EXTRA/offsets крос-валідовано Python-реалізацією (notebook був down) (S5)
+**Рішення:** CRC_EXTRA HEARTBEAT=50, ATTITUDE=39, GLOBAL_POSITION_INT=104; offsets per documented dialect. NotebookLM auth протухав під час M8, тож замість notebook-звірки зроблено незалежну крос-перевірку: окрема Python-реалізація CRC будує кадри, C++ парсер їх приймає (frames_crc_error=0) і декодує правильні значення (heartbeat LOITER/armed, attitude roll 0.5, position lat/lon/rel_alt).
+**Чому:** дві незалежні імплементації того самого документованого алгоритму, що збігаються — сильний доказ коректності framing+offsets+CRC_EXTRA без notebook.
+**How to apply:** ПЕРЕД hardware bring-up (M11/M15) все одно звірити проти pymavlink на реальному ArduPilot-потоці; крос-перевірка Python не ловить помилку якщо обидві імплементації мають однаковий хибний CRC_EXTRA (хоча значення — стандартні).
+
+### D-021: telemetry freshness → mavlink_ok через clock injection (S5)
+**Рішення:** `MavlinkTelemetry.update(now_ns)` рахує age кожного повідомлення; `mavlink_ok = heartbeat_seen && age ∈ [0, max_heartbeat_age_ns]` (дефолт 2с). Negative age (future timestamp) → not ok (fail-closed). Той самий clock-injection патерн що HealthMonitor (D-008). HealthMonitor.set_mavlink_ok споживає цей bool на рівні orchestrator.
+**Чому:** stale/missing heartbeat має одразу ронити link health; детермінований годинник для відтворюваних тестів.
 **Чому:** малі patterns мають велику ambiguity природньо. Жорсткі production thresholds зробили б тести brittle на synthetic data, не давши користі.
 **How to apply:** перед M11/M12 (live capture на Pi) перевірити що default thresholds passуються на реальних 64×48 IMX219 кадрах; якщо ні — або thresholds слабші, або матчер потребує fallback descriptor (M5 future work).
 

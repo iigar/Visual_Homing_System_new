@@ -14,6 +14,8 @@ add_library(vh_core STATIC
   src/route_matcher.cpp
   src/route_quality.cpp
   src/navigator.cpp
+  src/mavlink.cpp
+  src/telemetry.cpp
 )
 target_include_directories(vh_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
@@ -39,3 +41,5 @@ vh_add_test(test_route_recorder)
 vh_add_test(test_route_matcher)
 vh_add_test(test_route_quality)
 vh_add_test(test_navigator)
+vh_add_test(test_mavlink)
+vh_add_test(test_telemetry)
