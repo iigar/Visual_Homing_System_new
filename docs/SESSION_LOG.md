@@ -2,6 +2,22 @@
 
 > Append-only. Новий запис зверху.
 
+## 2026-06-15 — M10 (camera profiles)
+
+**Зроблено (1 модуль, 1 тест +11 cases, 1 CLI, 1 doc; 19/19 CTest зелені):**
+
+| Компонент | Що |
+|-----------|-----|
+| `camera_profile.{hpp,cpp}` | CameraProfile (id, sensor visible/thermal/other, capture+target dims, pixel format, h/v FOV, matcher+quality thresholds, mean_normalise). validate_profile, key=value parse/format, profile_to_json. FOV→rad-per-pixel (capture/target) + matcher_microrad_per_pixel. compute_ground_footprint (2·h·tan(fov/2), reject non-finite/non-pos). visual_scale_mismatch (diagnostic). to_matcher_config/to_quality_policy. imx219_profile built-in. ProfileRegistry (list/get/set_active) |
+| `tools/vh_camera_profile` | validate / json / footprint commands |
+| `docs/CAMERA_PROFILES.md` | resolution/altitude relationship + diagnostic-first safety |
+
+**Тести:** validation (5 reject paths), text roundtrip, bad-sensor reject, json, rad-per-pixel, ground footprint + bad-altitude reject, visual scale mismatch, to_matcher_config, imx219 builtin, registry. E2E CLI demo: IMX219 @30m → ground 40.7×27.2m, 0.64 m/px target, microrad/px 18641.
+
+**Рішення:** D-024 (FOV-derived rad-per-pixel; ground footprint/scale mismatch = DIAGNOSTIC ONLY, не впливають на live команди).
+
+**Наступне:** M11 (Pi hardware capture — libcamera Trixie, compile/runtime gates, desktop fail-closed без live capture). Перший milestone що виходить на Pi.
+
 ## 2026-06-15 — M9 (dry-run MAVLink boundary)
 
 **Зроблено (2 шари, 2 нові тести +11 cases; 18/18 CTest зелені):**

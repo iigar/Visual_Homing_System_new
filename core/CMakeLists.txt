@@ -18,6 +18,7 @@ add_library(vh_core STATIC
   src/telemetry.cpp
   src/command_sink.cpp
   src/dry_run_bridge.cpp
+  src/camera_profile.cpp
 )
 target_include_directories(vh_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
@@ -47,3 +48,4 @@ vh_add_test(test_mavlink)
 vh_add_test(test_telemetry)
 vh_add_test(test_command_sink)
 vh_add_test(test_dry_run_bridge)
+vh_add_test(test_camera_profile)

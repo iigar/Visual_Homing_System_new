@@ -79,6 +79,14 @@
 **Рішення:** `DryRunBridge.tick(match, base_health, now)` оновлює telemetry, бере snapshot, і накладає на health: `eff.mavlink_ok = ts.mavlink_ok && !incompatible`. Stale heartbeat або incompatible FC (disarmed коли `require_armed`) → mavlink_ok false → navigator gate відмовляє valid command. Команда (valid чи zero/invalid) йде в DryRunCommandSink. Лічильники: ticks, blocked_stale, blocked_incompatible, commands_valid/invalid.
 **Чому:** промпт — "do not generate valid command proposals when FC state is stale or incompatible". Перевикористовує існуючий navigator mavlink_ok gate замість дублювання логіки.
 **How to apply:** реальний orchestrator (post-M13) робить те саме: telemetry → health overlay → navigator → sink. Bridge НЕ відкриває MAVLink writer — boundary fail-closed.
+
+## 2026-06-15 — M10
+
+### D-024: Camera profiles — FOV-derived rad-per-pixel, ground footprint = DIAGNOSTIC ONLY (M10)
+**Рішення:** CameraProfile (id, sensor type, capture/target dims, pixel format, h/v FOV, matcher+quality thresholds, mean_normalise). FOV → rad-per-pixel: `horizontal_fov_rad / target_width` → microrad/px для matcher (раніше передавали вручну). Ground footprint = `2·h·tan(fov/2)` + meters-per-pixel. Зберігання — key=value текст (consistent з проєктом, без JSON-залежності); `profile_to_json` для UI/API. ProfileRegistry: list/get/set_active. IMX219 built-in (nominal FOV, ОБОВ'ЯЗКОВО виміряти для реальної лінзи). Валідація: non-empty id, dims>0, target≤capture, FOV∈(0,π) finite.
+**Чому:** промпт M10. Key=value замість JSON-парсера — нуль залежностей, JSON лише на вихід.
+**SAFETY:** ground footprint, meters-per-pixel, visual/baro scale mismatch — ДІАГНОСТИКА. НЕ впливають на live команди без dry-run evidence + окремого safety рішення. `visual_scale_mismatch` повертає лише flag для логів; командний шлях його не споживає. `compute_ground_footprint` reject non-finite/non-positive altitude.
+**How to apply:** M11 libcamera капче в capture dims, препроцес → target dims; matcher бере microrad/px з профілю. Thermal (Caddx 256) — окремий milestone (свій transport/calibration/policy), Pi libcamera його НЕ покриває.
 **Чому:** малі patterns мають велику ambiguity природньо. Жорсткі production thresholds зробили б тести brittle на synthetic data, не давши користі.
 **How to apply:** перед M11/M12 (live capture на Pi) перевірити що default thresholds passуються на реальних 64×48 IMX219 кадрах; якщо ні — або thresholds слабші, або матчер потребує fallback descriptor (M5 future work).
 
