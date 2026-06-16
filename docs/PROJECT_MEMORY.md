@@ -2,29 +2,23 @@
 
 > Перезаписується наприкінці кожної сесії. Ліміт 150 рядків. Журнал — у SESSION_LOG.md.
 
-## Стан: M10 завершено (2026-06-15) — camera profiles
+## Стан: M11 завершено (2026-06-16) — Pi hardware capture (libcamera Trixie)
 
 **Реалізовано:**
-- `vh/camera_profile.{hpp,cpp}` — CameraProfile: id, sensor (visible/thermal/other), capture+target w/h, pixel_format, h/v FOV, matcher thresholds (min_confidence_mille, window_radius), quality thresholds (low_texture/ambiguous/avg_nearest_mad), mean_normalise hint
-  - validate_profile (id non-empty, dims>0, target≤capture, FOV∈(0,π) finite)
-  - key=value parse/format (без JSON-залежності) + profile_to_json (для UI/API)
-  - rad_per_pixel_h/v (capture/target), matcher_microrad_per_pixel = horizontal_fov/target_width·1e6
-  - compute_ground_footprint = 2·h·tan(fov/2) + meters_per_pixel; reject non-finite/non-pos altitude
-  - visual_scale_mismatch (route vs current altitude) — DIAGNOSTIC ONLY
-  - to_matcher_config / to_quality_policy (профіль живить M5/M6)
-  - imx219_profile built-in (nominal FOV — виміряти для реальної лінзи)
-  - ProfileRegistry: add/list/get/set_active/active
-- `tools/vh_camera_profile` — validate/json/footprint CLI
-- `docs/CAMERA_PROFILES.md` — resolution/altitude relationship + diagnostic-first safety
+- `vh/pi_camera.{hpp,cpp}` — `PiCameraSource : ICameraSource` (pimpl ховає libcamera з public API)
+  - PiCameraConfig (capture w/h, buffer_count, frame_timeout_ms, camera_index), PiCameraError (11), validate_pi_camera_config (dims∈(0,8192], buffers≥1, timeout>0) — передує compile-гейту
+  - Двійний гейт: (1) compile `VH_ENABLE_LIBCAMERA` (PUBLIC define — умовний pimpl member) — desktop fail-closed stub, `open()`→NotCompiledIn; (2) runtime `open()` acquire+configure R8@capture dims інакше closed, `next_frame()`→nullopt
+  - Pi backend (`#if VH_ENABLE_LIBCAMERA`): CameraManager→acquire→R8 stream→FrameBufferAllocator→Request; async `requestCompleted` → sync `next_frame()` через mutex+cv+черга; mmap-per-fd + row-copy зі `StreamConfiguration::stride`; validate() adjusted ≠ запит → ConfigureFailed
+- CMake: ON → pkg-config libcamera link; OFF → define=0, нуль залежності
+- `scripts/build-test-pi.sh` (build-pi/, libcamera ON, live-output OFF), `scripts/pi-camera-probe.sh` (READ-ONLY camera list)
 
-**Тести:** 19 CTest, 100% pass. test_camera_profile (11 cases). E2E: IMX219 @30m → ground 40.7×27.2m, 0.64 m/px target.
+**Тести:** 20 CTest desktop, 100% pass. test_pi_camera (config validation, fail-closed, NotStarted, NotCompiledIn).
 
-**Наступна сесія: M11 (Pi hardware capture) — ПЕРШИЙ на Pi**
-- Pi camera backend (libcamera) за compile-time + runtime gates
-- Desktop builds fail-closed без live capture
-- Pi build strategy (native CTest повільний на Zero 2W; стабільні incremental build dirs, ignored)
-- ⚠ Trixie libcamera API відрізняється від Bullseye/Bookworm — запитати NotebookLM (libcamera C++ API вже в notebook)
-- Capture у capture dims → preprocess → target dims; matcher бере microrad/px з camera profile (M10)
+**⚠ Хвіст:** Pi-секція НЕ компілювалась (немає Pi) — обовʼязково `build-test-pi.sh` на реальному Pi перед M12. libcamera 0.3+ Trixie API підтверджено NotebookLM (formats::R8, plane.fd().get(), stride).
+
+**Наступна сесія: M12 (live route matching dry-run)**
+- Speed mismatch validation, endpoint action, compact log
+- Бере кадри з PiCameraSource (capture dims з активного CameraProfile M10) → preprocess → matcher
 
 ## Архітектурні константи (не міняти без DECISIONS.md запису)
 
@@ -36,6 +30,7 @@
 - mavlink_ok = свіжий heartbeat; stale/future → fail-closed (D-021)
 - Command boundary fail-closed: DryRunCommandSink stopped-by-default, single-writer (D-022). Bridge накладає telemetry freshness на validity (D-023)
 - Camera profile FOV → rad-per-pixel для matcher; ground footprint/scale mismatch = DIAGNOSTIC ONLY, не впливають на live команди (D-024)
+- Pi capture: двійний гейт (compile VH_ENABLE_LIBCAMERA + runtime open), pimpl, fail-closed; libcamera async→sync ізольовано в backend; VH_ENABLE_LIBCAMERA ≠ live output (D-025)
 - VHRS LE через explicit store_le/load_le; digest = FNV-1a 64-bit (non-crypto)
 - Each test = окремий CTest executable
 - Direction shift: positive = live displaced RIGHT vs reference (D-015)
@@ -66,3 +61,4 @@ S0✅ → M1-M10✅ → **M11(Pi)** → M12(Pi) → M13+M14 → M15(Pi+FC) → M
 - MAVLink v2 truncation: payload буфер zero-fill, декодер читає фіксовані offsets безпечно
 - Ring buffer history: oldest = (head + cap - size) % cap; seq лічильник окремо від retention
 - Camera profile: зберігання key=value (нуль залежностей), JSON лише на вихід; FOV nominal ≠ measured (реальна лінза/crop)
+- Pi capture pimpl: libcamera headers ТІЛЬКИ в .cpp під `#if`; compile-define PUBLIC (інакше pimpl member layout розходиться між TU); validate config ПЕРЕД compile-гейтом (детермінізм desktop/Pi); код під `#if VH_ENABLE_LIBCAMERA` desktop НЕ компілює → перевіряти на Pi окремо

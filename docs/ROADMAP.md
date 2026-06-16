@@ -13,7 +13,7 @@
 - [x] **M8** Read-only MAVLink telemetry: v1/v2 framing, heartbeat/attitude/altitude, untrusted input
 - [x] **M9** Dry-run MAVLink boundary: DryRunCommandSink, bridge, stale telemetry blocking
 - [x] **M10** Camera profiles: FOV, ground footprint, resolution/altitude docs, IMX219 profile
-- [ ] **M11** Pi hardware capture: libcamera (Trixie), build strategy, скрипти
+- [x] **M11** Pi hardware capture: libcamera (Trixie), build strategy, скрипти — ⚠ Pi-секція не скомпільована (немає Pi); desktop fail-closed зелений
 - [ ] **M12** Live route matching dry-run: speed mismatch validation, endpoint action, compact log
 - [ ] **M13** Safety scaffolding: SafetyGate, AuditLog, Session, watchdog stale-data, blocked bridge stub
 - [ ] **M14** Readiness checkers: 3 shell checkers, evidence collection

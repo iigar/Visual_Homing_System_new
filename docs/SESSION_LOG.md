@@ -2,6 +2,27 @@
 
 > Append-only. Новий запис зверху.
 
+## 2026-06-16 — M11 (Pi hardware capture — libcamera Trixie)
+
+**Зроблено (1 модуль pimpl, 1 тест, 2 Pi-скрипти; 20/20 CTest desktop зелені):**
+
+| Компонент | Що |
+|-----------|-----|
+| `pi_camera.{hpp,cpp}` | `PiCameraSource : ICameraSource`. PiCameraConfig (capture w/h, buffer_count, frame_timeout_ms, camera_index), PiCameraError (11 станів), validate_pi_camera_config. Pimpl ховає libcamera headers від public API. Desktop: fail-closed stub (`open()` → NotCompiledIn, `next_frame()` без open → NotStarted). Pi (`#if VH_ENABLE_LIBCAMERA`): CameraManager→acquire→R8 stream@capture dims→FrameBufferAllocator→Request, async `requestCompleted` → sync `next_frame()` через mutex+cv+черга, mmap-per-fd + row-copy зі stride. validate() Adjusted format/dims ≠ запит → ConfigureFailed (fail-closed) |
+| CMake | `VH_ENABLE_LIBCAMERA` PUBLIC define (ABI: умовний pimpl member). ON → pkg-config libcamera link; OFF → define=0, нуль залежності |
+| `scripts/build-test-pi.sh` | Pi build (build-pi/, Release), libcamera ON, всі live-output опції явно OFF |
+| `scripts/pi-camera-probe.sh` | READ-ONLY: список камер + R8 формат (rpicam-hello/cam) |
+
+**Тести (test_pi_camera):** config validation (6 reject paths), open invalid-config → InvalidConfig, next_frame before open → NotStarted, close idempotent, error strings, desktop fail-closed (open → NotCompiledIn).
+
+**Рішення:** D-025 (двійний гейт compile+runtime, async→sync міст ізольовано в backend, fail-closed; VH_ENABLE_LIBCAMERA НЕ передбачає live output).
+
+**Крос-валідація:** libcamera 0.3+ Trixie API через NotebookLM (relogin знадобився) — formats::R8, plane.fd().get() SharedFD, stride row-copy.
+
+**⚠ Хвіст:** Pi-секція (`#if VH_ENABLE_LIBCAMERA`) НЕ компілювалась цю сесію (немає Pi). Обовʼязково `build-test-pi.sh` на реальному Pi перед M12/польовим використанням — можливі дрібні API-правки.
+
+**Наступне:** M12 (live route matching dry-run — speed mismatch validation, endpoint action, compact log).
+
 ## 2026-06-15 — M10 (camera profiles)
 
 **Зроблено (1 модуль, 1 тест +11 cases, 1 CLI, 1 doc; 19/19 CTest зелені):**

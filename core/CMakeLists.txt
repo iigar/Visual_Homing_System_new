@@ -19,8 +19,24 @@ add_library(vh_core STATIC
   src/command_sink.cpp
   src/dry_run_bridge.cpp
   src/camera_profile.cpp
+  src/pi_camera.cpp
 )
 target_include_directories(vh_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+# --- Pi hardware capture gate (M11) ------------------------------------------
+# VH_ENABLE_LIBCAMERA is PUBLIC: it conditionally declares a pimpl member in
+# vh/pi_camera.hpp, so every consumer must see the same value (ABI consistency).
+# Desktop builds compile the fail-closed stub; the libcamera dependency is only
+# pulled in on Pi builds (-DVH_ENABLE_LIBCAMERA=ON).
+if(VH_ENABLE_LIBCAMERA)
+  target_compile_definitions(vh_core PUBLIC VH_ENABLE_LIBCAMERA=1)
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(LIBCAMERA REQUIRED IMPORTED_TARGET libcamera)
+  target_link_libraries(vh_core PUBLIC PkgConfig::LIBCAMERA)
+  message(STATUS "VH libcamera link:  ${LIBCAMERA_VERSION}")
+else()
+  target_compile_definitions(vh_core PUBLIC VH_ENABLE_LIBCAMERA=0)
+endif()
 
 # --- Tests --------------------------------------------------------------------
 function(vh_add_test name)
@@ -49,3 +65,4 @@ vh_add_test(test_telemetry)
 vh_add_test(test_command_sink)
 vh_add_test(test_dry_run_bridge)
 vh_add_test(test_camera_profile)
+vh_add_test(test_pi_camera)
