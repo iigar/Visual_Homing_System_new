@@ -21,6 +21,8 @@ add_library(vh_core STATIC
   src/camera_profile.cpp
   src/pi_camera.cpp
   src/match_session.cpp
+  src/safety_gate.cpp
+  src/live_output.cpp
 )
 target_include_directories(vh_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
@@ -68,3 +70,5 @@ vh_add_test(test_dry_run_bridge)
 vh_add_test(test_camera_profile)
 vh_add_test(test_pi_camera)
 vh_add_test(test_match_session)
+vh_add_test(test_safety_gate)
+vh_add_test(test_live_output)

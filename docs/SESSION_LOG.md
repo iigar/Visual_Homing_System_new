@@ -2,6 +2,23 @@
 
 > Append-only. Новий запис зверху.
 
+## 2026-06-17 — M13 (non-live live-output safety scaffolding)
+
+**Зроблено (2 модулі, 2 тести +28 cases; 23/23 CTest desktop зелені). Жодного live output:**
+
+| Компонент | Що |
+|-----------|-----|
+| `safety_gate.{hpp,cpp}` | `GateDecision{allowed, block_reasons[]}` (визначено тип з interfaces.hpp). `LiveMavlinkOutputSafetyGate.evaluate(SafetyGateInputs)` — 15 явних reasons у детермінованому порядку (runtime/operator/writer/audit/quality/camera_frame/telemetry/armed/match valid+stale+confidence/command valid+finite+bounds+forward_speed). Default config → blocked. `format_block_reasons` |
+| `live_output.{hpp,cpp}` | `LiveMavlinkOutputAuditLog : IAuditLog` (start/decision/stop, can_write=ready&&!write_fail, fail-closed). `LiveMavlinkBridge : ICommandSink` stub (available/start/send/started усі false). `LiveMavlinkOutputSession` координатор (start fail-closed; tick→evaluate→audit→dry_sink; audit fail→stop; allowed→live_bridge рефузить, live_rejected++; block_reason_counts; mark_endpoint→endpoint_progress_reached; stop) |
+
+**Тести:** test_safety_gate (17: all-green allowed, кожна з 15 reasons, default blocks), test_live_output (11: audit readiness/write-fail/counts, bridge unavailable, session start fail-closed/blocked-audited/allowed-never-transmits/not-started/endpoint-stops/operator-stop/audit-fail-during-tick).
+
+**CMake перевірка:** ланцюг live-output fail-closed підтверджено — attach-alone і live-output-без-props-off → FATAL_ERROR; повний ланцюг конфігурується.
+
+**Рішення:** D-027 (default-blocked gate, нуль transmission — навіть allowed впирається в рефузячий bridge; audit write fail→block+stop; CMake chain).
+
+**Наступне:** M14 (readiness checkers + evidence — 3 shell checkers: check-route-quality-log / check-live-readiness-log / check-live-session-audit-log; readiness expects vehicle_not_armed:N block reason).
+
 ## 2026-06-17 — M12 (live route matching dry-run)
 
 **Зроблено (1 модуль, 1 тест +10 cases, 1 CLI, E2E demo; 21/21 CTest desktop зелені):**

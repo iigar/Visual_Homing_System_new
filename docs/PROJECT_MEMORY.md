@@ -2,22 +2,21 @@
 
 > Перезаписується наприкінці кожної сесії. Ліміт 150 рядків. Журнал — у SESSION_LOG.md.
 
-## Стан: M12 завершено (2026-06-17) — live route matching dry-run
+## Стан: M13 завершено (2026-06-17) — live-output safety scaffolding (нуль transmission)
 
-**Реалізовано:**
-- `vh/match_session.{hpp,cpp}` — `DryRunMatchSession` над DryRunBridge (M9)
-  - `step_match(RouteMatch)` (тести) / `step(Frame)` (матчить через matcher M5) → акумуляція evidence
-  - ExpectedProgress any/forward/reverse; progress first/last/min/max; regressions + rollback_total_mille + index_jumps = speed mismatch як явна validation-змінна
-  - Endpoint gate (fwd: progress≥gate; rev: ≤1000−gate) → STOP команд + stop_reason=endpoint_reached, наступні кадри без команд (fail-closed)
-  - live-output межа hard-closed: allowed=0, blocked=N, reason `live_output_disabled`; dry_run_quality (M6) + telemetry health окремі gates
-  - `format_compact_log` (всі поля промпту M12); MatchSessionResult.passed = AND усіх gates
-- `tools/vh_match_session` — route.vhrs + frames.csv → compact log; --expected/--endpoint-gate/--min-confidence/--fps/--quality-pass/--synthetic-heartbeat; exit 0 iff passed
+**Реалізовано (жодного live output):**
+- `vh/safety_gate.{hpp,cpp}` — `GateDecision{allowed, block_reasons[]}` (тип з interfaces.hpp визначено). `LiveMavlinkOutputSafetyGate.evaluate(SafetyGateInputs)` → 15 явних reasons (детермінований порядок): runtime_not_enabled, operator_not_confirmed, writer_not_owned, audit_not_ready, dry_run_quality_not_passed, camera_frame_timeout, telemetry_stale, vehicle_not_armed, match_invalid, match_stale, match_low_confidence, command_invalid, command_not_finite, command_out_of_bounds, forward_speed_nonzero. Default config → blocked
+- `vh/live_output.{hpp,cpp}`:
+  - `LiveMavlinkOutputAuditLog : IAuditLog` — start/decision/stop, can_write=ready&&!write_fail (fail-closed)
+  - `LiveMavlinkBridge : ICommandSink` — stub, available/start/send/started усі false (real writer = M17)
+  - `LiveMavlinkOutputSession` — start fail-closed; tick→evaluate→audit→dry_sink (history); audit fail→+audit_write_failed+stop; allowed→live_bridge рефузить (live_rejected++, нуль TX); block_reason_counts (reason→count); mark_endpoint→endpoint_progress_reached
 
-**Тести:** 21 CTest desktop, 100% pass. test_match_session (10 cases). E2E self-replay: passed=1, frames=5/5, progress 0..1000, endpoint_passed=1, live_output_gate_allowed=0/blocked=5.
+**Тести:** 23 CTest desktop, 100% pass. test_safety_gate (17), test_live_output (11). CMake chain fail-closed підтверджено (partial live config → FATAL_ERROR).
 
-**Наступна сесія: M13 (non-live live-output safety scaffolding)**
-- `LiveMavlinkOutputSafetyGate`: runtime enable + operator confirm + single-writer + audit ready + dry-run quality + fresh telemetry + valid/fresh/high-conf match + finite bounded command + exact zero forward speed; explicit block reasons
-- Усе ще НЕ live output — це лише gate-логіка (AuditLog/SafetyGate/Session)
+**Наступна сесія: M14 (readiness checkers + evidence)**
+- 3 shell checkers: check-route-quality-log.sh (вже є з M6 — звірити), check-live-readiness-log.sh, check-live-session-audit-log.sh
+- check-live-readiness вимагає: passed=true, frames=150/150, valid_matches=150, endpoint_passed, progress_gate_passed, telemetry_health, telemetry_dropped=0, dry_run_quality, dry_run_valid=150/150, live_output_gate_allowed=0, blocked=150, block reason `vehicle_not_armed:150`
+- ⚠ block reason `vehicle_not_armed:N` — M12 match session ЗАРАЗ емітить `live_output_disabled`; для M14 readiness log треба прогнати через M13 gate (або адаптувати) щоб reason став vehicle_not_armed
 
 **⚠ Хвіст M11:** Pi-секція (`#if VH_ENABLE_LIBCAMERA`) НЕ компільована (немає Pi) — `build-test-pi.sh` на Pi перед польовим використанням
 
@@ -33,6 +32,7 @@
 - Camera profile FOV → rad-per-pixel для matcher; ground footprint/scale mismatch = DIAGNOSTIC ONLY, не впливають на live команди (D-024)
 - Pi capture: двійний гейт (compile VH_ENABLE_LIBCAMERA + runtime open), pimpl, fail-closed; libcamera async→sync ізольовано в backend; VH_ENABLE_LIBCAMERA ≠ live output (D-025)
 - M12 match session: speed mismatch (regressions/rollback/index_jumps) — явна validation-змінна, не діє мовчки; endpoint → STOP команд fail-closed; live-output hard-blocked (allowed=0); dry_run_quality+telemetry окремі gates; матчить кадри ВЖЕ у route dims (preprocess вище) (D-026)
+- M13 safety scaffolding: gate default-blocked, 15 явних reasons; нуль transmission (allowed впирається в рефузячий LiveMavlinkBridge); audit write fail → block+stop; SafetyGateInputs багатший за ISafetyGate; AuditLog реалізує IAuditLog (D-027)
 - VHRS LE через explicit store_le/load_le; digest = FNV-1a 64-bit (non-crypto)
 - Each test = окремий CTest executable
 - Direction shift: positive = live displaced RIGHT vs reference (D-015)
