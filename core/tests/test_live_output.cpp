@@ -83,6 +83,26 @@ void test_audit_decision_counts() {
   VH_EXPECT(audit.counters().blocked == 1);
 }
 
+void test_audit_format_log() {
+  vh::LiveMavlinkOutputAuditLog audit(true);
+  audit.record_start("live_match_dry_run");
+  vh::GateDecision blocked;
+  blocked.block_reasons.emplace_back("vehicle_not_armed");
+  vh::NavigationCommand cmd = a_command();
+  cmd.vx_mps = 0.0f;
+  audit.record_decision(cmd, blocked);
+  audit.record_stop("endpoint_progress_reached");
+
+  const std::string log = audit.format_log();
+  VH_EXPECT(log.find("audit_event=start reason=live_match_dry_run") !=
+            std::string::npos);
+  VH_EXPECT(log.find("audit_event=decision allowed=false "
+                     "reason=vehicle_not_armed valid=true vx_mps=0") !=
+            std::string::npos);
+  VH_EXPECT(log.find("audit_event=stop reason=endpoint_progress_reached") !=
+            std::string::npos);
+}
+
 void test_live_bridge_unavailable() {
   vh::LiveMavlinkBridge bridge;
   VH_EXPECT(!bridge.available());
@@ -224,6 +244,7 @@ int main() {
   test_audit_readiness_fail_closed();
   test_audit_write_failure();
   test_audit_decision_counts();
+  test_audit_format_log();
   test_live_bridge_unavailable();
   test_session_start_fail_closed();
   test_session_blocked_decision_audited();

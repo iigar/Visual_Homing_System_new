@@ -2,23 +2,24 @@
 
 > Перезаписується наприкінці кожної сесії. Ліміт 150 рядків. Журнал — у SESSION_LOG.md.
 
-## Стан: M13 завершено (2026-06-17) — live-output safety scaffolding (нуль transmission)
+## Стан: M14 завершено (2026-06-17) — readiness checkers + evidence
 
-**Реалізовано (жодного live output):**
-- `vh/safety_gate.{hpp,cpp}` — `GateDecision{allowed, block_reasons[]}` (тип з interfaces.hpp визначено). `LiveMavlinkOutputSafetyGate.evaluate(SafetyGateInputs)` → 15 явних reasons (детермінований порядок): runtime_not_enabled, operator_not_confirmed, writer_not_owned, audit_not_ready, dry_run_quality_not_passed, camera_frame_timeout, telemetry_stale, vehicle_not_armed, match_invalid, match_stale, match_low_confidence, command_invalid, command_not_finite, command_out_of_bounds, forward_speed_nonzero. Default config → blocked
-- `vh/live_output.{hpp,cpp}`:
-  - `LiveMavlinkOutputAuditLog : IAuditLog` — start/decision/stop, can_write=ready&&!write_fail (fail-closed)
-  - `LiveMavlinkBridge : ICommandSink` — stub, available/start/send/started усі false (real writer = M17)
-  - `LiveMavlinkOutputSession` — start fail-closed; tick→evaluate→audit→dry_sink (history); audit fail→+audit_write_failed+stop; allowed→live_bridge рефузить (live_rejected++, нуль TX); block_reason_counts (reason→count); mark_endpoint→endpoint_progress_reached
+**Реалізовано:**
+- Гармонізація логу: `format_compact_log` bool → `true/false`, block reasons → `reason:count` (map-sorted)
+- Інтеграція M13 gate у DryRunMatchSession: `set_live_output_gate(gate, LiveOutputContext{single_writer_owned, audit_ready})` — per-frame SafetyGateInputs (health+bridge.telemetry+match+command+now) → real allowed/blocked + reason counts; без gate fallback `live_output_disabled`
+- `live_output`: AuditRecord +command_valid+vx_mps; `LiveMavlinkOutputAuditLog::format_log()` (one event/line)
+- CLI: `vh_match_session --readiness` (gate operator-confirmed + disarmed fresh heartbeat → vehicle_not_armed:N); НОВИЙ `vh_live_session` (драйвить LiveMavlinkOutputSession → audit log; endpoint→mark_endpoint)
+- `scripts/check-live-readiness-log.sh` + `check-live-session-audit-log.sh` (параметризовані expected count, дефолт 150); `check-route-quality-log.sh` вже з M6
+- `docs/LIVE_OUTPUT_READINESS_RECORD.md` — evidence ledger (3/3 Pi слоти для M15 + desktop reference)
 
-**Тести:** 23 CTest desktop, 100% pass. test_safety_gate (17), test_live_output (11). CMake chain fail-closed підтверджено (partial live config → FATAL_ERROR).
+**Тести:** 23 CTest desktop, 100% pass (test_match_session 11, test_live_output 12). **E2E 150-кадровий self-replay:** readiness passed=true frames=150/150 … vehicle_not_armed:150; audit 1 start+150 decisions+1 endpoint stop; обидва checkers pass.
 
-**Наступна сесія: M14 (readiness checkers + evidence)**
-- 3 shell checkers: check-route-quality-log.sh (вже є з M6 — звірити), check-live-readiness-log.sh, check-live-session-audit-log.sh
-- check-live-readiness вимагає: passed=true, frames=150/150, valid_matches=150, endpoint_passed, progress_gate_passed, telemetry_health, telemetry_dropped=0, dry_run_quality, dry_run_valid=150/150, live_output_gate_allowed=0, blocked=150, block reason `vehicle_not_armed:150`
-- ⚠ block reason `vehicle_not_armed:N` — M12 match session ЗАРАЗ емітить `live_output_disabled`; для M14 readiness log треба прогнати через M13 gate (або адаптувати) щоб reason став vehicle_not_armed
+**Наступна сесія: M15 (3/3 readiness state) — ПОТРЕБУЄ Pi**
+- Передумова: M11 Pi bring-up (build-test-pi.sh на Pi, fix compile, реальний захват)
+- Зібрати 3 чисті Pi evidence logs у RECORD.md: route quality_pass + 150/150 dry-run + endpoint/progress gate + telemetry health + 150 blocked vehicle_not_armed; CTest на Pi
+- Після 3/3: оновити roadmap/safety plan/decisions/session log/memory. Live output ЛИШАЄТЬСЯ blocked
 
-**⚠ Хвіст M11:** Pi-секція (`#if VH_ENABLE_LIBCAMERA`) НЕ компільована (немає Pi) — `build-test-pi.sh` на Pi перед польовим використанням
+**⚠ Хвіст M11:** Pi-секція (`#if VH_ENABLE_LIBCAMERA`) НЕ компільована (немає Pi) — Pi bring-up = окрема сесія ПЕРЕД M15
 
 ## Архітектурні константи (не міняти без DECISIONS.md запису)
 
@@ -33,6 +34,7 @@
 - Pi capture: двійний гейт (compile VH_ENABLE_LIBCAMERA + runtime open), pimpl, fail-closed; libcamera async→sync ізольовано в backend; VH_ENABLE_LIBCAMERA ≠ live output (D-025)
 - M12 match session: speed mismatch (regressions/rollback/index_jumps) — явна validation-змінна, не діє мовчки; endpoint → STOP команд fail-closed; live-output hard-blocked (allowed=0); dry_run_quality+telemetry окремі gates; матчить кадри ВЖЕ у route dims (preprocess вище) (D-026)
 - M13 safety scaffolding: gate default-blocked, 15 явних reasons; нуль transmission (allowed впирається в рефузячий LiveMavlinkBridge); audit write fail → block+stop; SafetyGateInputs багатший за ISafetyGate; AuditLog реалізує IAuditLog (D-027)
+- M14 evidence: лог-формат true/false + reason:count; vehicle_not_armed ЧЕСНИЙ через gate-інтеграцію (не штамп); endpoint gate=1000 у evidence → endpoint на фінальному кадрі (150 decisions, без post-endpoint tail); evidence ≠ дозвіл на live output (D-028)
 - VHRS LE через explicit store_le/load_le; digest = FNV-1a 64-bit (non-crypto)
 - Each test = окремий CTest executable
 - Direction shift: positive = live displaced RIGHT vs reference (D-015)

@@ -22,6 +22,7 @@
 // counted as BLOCKED with an explicit reason; allowed is always zero.
 
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -31,6 +32,7 @@
 #include "vh/health.hpp"
 #include "vh/interfaces.hpp"
 #include "vh/route_match.hpp"
+#include "vh/safety_gate.hpp"
 
 namespace vh {
 
@@ -96,11 +98,20 @@ struct MatchSessionResult {
   std::uint32_t dry_run_valid = 0;  // valid dry-run commands recorded
   std::uint32_t dry_run_total = 0;  // command attempts (pre-endpoint frames)
 
-  std::uint64_t live_output_gate_allowed = 0;  // always 0 (fail-closed)
+  std::uint64_t live_output_gate_allowed = 0;  // 0 in dry-run / bench readiness
   std::uint64_t live_output_gate_blocked = 0;
-  std::vector<std::string> live_output_gate_block_reasons;
+  // reason -> count. With a safety gate attached these are the real gate
+  // reasons (e.g. {"vehicle_not_armed": N}); without one, {"live_output_disabled": N}.
+  std::map<std::string, std::uint64_t> live_output_gate_block_reason_counts;
 
   std::string stop_reason;  // "endpoint_reached" / "exhausted" / "" (running)
+};
+
+// Static (per-session) flags the safety gate needs that are not in the command
+// stream. Supplied once via DryRunMatchSession::set_live_output_gate.
+struct LiveOutputContext {
+  bool single_writer_owned = false;
+  bool audit_ready = false;
 };
 
 class DryRunMatchSession {
@@ -122,6 +133,13 @@ class DryRunMatchSession {
   // If no matcher was supplied, the frame is treated as an invalid match.
   NavigationCommand step(const Frame& frame, const HealthSnapshot& base_health,
                          std::int64_t now_ns);
+
+  // Attach a live-output safety gate (M13). When set, each command attempt is
+  // evaluated by the gate and the real block reasons (with counts) populate the
+  // live-output accounting instead of the placeholder "live_output_disabled".
+  // The gate must outlive the session.
+  void set_live_output_gate(const LiveMavlinkOutputSafetyGate& gate,
+                            LiveOutputContext ctx) noexcept;
 
   // Finalise aggregates and compute pass/fail. Idempotent.
   MatchSessionResult finish() noexcept;
@@ -154,10 +172,15 @@ class DryRunMatchSession {
   std::string stop_reason_;
   std::uint32_t dry_run_valid_ = 0;
   std::uint32_t dry_run_total_ = 0;
+  std::uint64_t live_output_allowed_ = 0;
   std::uint64_t live_output_blocked_ = 0;
-  bool block_reason_recorded_ = false;
+  std::map<std::string, std::uint64_t> live_block_counts_;
   std::int64_t first_ts_ns_ = 0;
   std::int64_t last_ts_ns_ = 0;
+
+  // Optional live-output safety gate (M13) + its static context.
+  const LiveMavlinkOutputSafetyGate* live_gate_ = nullptr;
+  LiveOutputContext live_ctx_;
 
   // Bridge counter baselines (so deltas are session-scoped).
   std::uint64_t base_blocked_stale_ = 0;

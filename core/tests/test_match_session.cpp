@@ -10,6 +10,7 @@
 #include "vh/mavlink.hpp"
 #include "vh/navigator.hpp"
 #include "vh/route_match.hpp"
+#include "vh/safety_gate.hpp"
 #include "vh_test.hpp"
 
 namespace {
@@ -42,9 +43,22 @@ Bytes heartbeat_armed() {
   return p;
 }
 
+Bytes heartbeat_disarmed() {
+  Bytes p(9, 0);
+  vh::store_le32(p.data(), 5);  // custom_mode (LOITER)
+  p[6] = 0x00;                  // base_mode NOT armed
+  return p;
+}
+
 // Keep telemetry fresh at `now` so the bridge's mavlink_ok gate stays open.
 void feed_heartbeat(vh::DryRunBridge& bridge, std::int64_t now) {
   Bytes hb = build_v1(vh::kMsgHeartbeat, heartbeat_armed());
+  bridge.ingest_telemetry(hb.data(), hb.size(), now);
+}
+
+// Fresh but disarmed heartbeat: telemetry is healthy, vehicle is not armed.
+void feed_heartbeat_disarmed(vh::DryRunBridge& bridge, std::int64_t now) {
+  Bytes hb = build_v1(vh::kMsgHeartbeat, heartbeat_disarmed());
   bridge.ingest_telemetry(hb.data(), hb.size(), now);
 }
 
@@ -303,17 +317,57 @@ void test_compact_log_fields() {
                  ready_health(now), now);
   }
   const std::string log = vh::format_compact_log(s.finish());
-  VH_EXPECT(log.find("passed=1") != std::string::npos);
+  VH_EXPECT(log.find("passed=true") != std::string::npos);
   VH_EXPECT(log.find("frames=5/5") != std::string::npos);
   VH_EXPECT(log.find("valid_matches=5") != std::string::npos);
-  VH_EXPECT(log.find("endpoint_passed=1") != std::string::npos);
-  VH_EXPECT(log.find("progress_gate_passed=1") != std::string::npos);
+  VH_EXPECT(log.find("endpoint_passed=true") != std::string::npos);
+  VH_EXPECT(log.find("progress_gate_passed=true") != std::string::npos);
+  VH_EXPECT(log.find("telemetry_health=true") != std::string::npos);
+  VH_EXPECT(log.find("dry_run_quality=true") != std::string::npos);
   VH_EXPECT(log.find("dry_run_valid=5/5") != std::string::npos);
   VH_EXPECT(log.find("live_output_gate_allowed=0") != std::string::npos);
   VH_EXPECT(log.find("live_output_gate_blocked=5") != std::string::npos);
-  VH_EXPECT(log.find("live_output_gate_block_reasons=live_output_disabled") !=
+  VH_EXPECT(log.find("live_output_gate_block_reasons=live_output_disabled:5") !=
             std::string::npos);
   VH_EXPECT(log.find("stop_reason=endpoint_reached") != std::string::npos);
+}
+
+// With a bench-readiness safety gate attached but the vehicle disarmed, every
+// command is blocked for exactly one reason: vehicle_not_armed.
+void test_live_output_gate_vehicle_not_armed() {
+  vh::BoundedNavigator nav;
+  vh::DryRunCommandSink sink;
+  vh::DryRunBridge bridge(nav, sink);
+  sink.start();
+  vh::DryRunMatchSession s(bridge, nominal_cfg());
+
+  vh::SafetyGateConfig gcfg;
+  gcfg.runtime_enabled = true;
+  gcfg.operator_confirmed = true;
+  vh::LiveMavlinkOutputSafetyGate gate(gcfg);
+  vh::LiveOutputContext ctx;
+  ctx.single_writer_owned = true;
+  ctx.audit_ready = true;
+  s.set_live_output_gate(gate, ctx);
+
+  const std::uint16_t prog[5] = {0, 250, 500, 750, 1000};
+  for (int i = 0; i < 5; ++i) {
+    const std::int64_t now = 1'000'000'000 + static_cast<std::int64_t>(i) * 100'000'000;
+    feed_heartbeat_disarmed(bridge, now);
+    vh::HealthSnapshot h = ready_health(now);
+    h.frames_seen = static_cast<std::uint64_t>(i) + 1;
+    h.frame_age_ns = 0;
+    s.step_match(mk(now, prog[i], static_cast<std::uint32_t>(i), 900),
+                 h, now);
+  }
+  auto r = s.finish();
+  VH_EXPECT(r.live_output_gate_allowed == 0);
+  VH_EXPECT(r.live_output_gate_blocked == 5);
+  VH_EXPECT(r.live_output_gate_block_reason_counts.size() == 1);
+  VH_EXPECT(r.live_output_gate_block_reason_counts.at("vehicle_not_armed") == 5);
+  const std::string log = vh::format_compact_log(r);
+  VH_EXPECT(log.find("live_output_gate_block_reasons=vehicle_not_armed:5") !=
+            std::string::npos);
 }
 
 }  // namespace
@@ -329,5 +383,6 @@ int main() {
   test_reverse_endpoint();
   test_dry_run_quality_gate();
   test_compact_log_fields();
+  test_live_output_gate_vehicle_not_armed();
   return ::vh::test::summary("test_match_session");
 }

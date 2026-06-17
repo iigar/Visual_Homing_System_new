@@ -1,6 +1,36 @@
 #include "vh/live_output.hpp"
 
+#include <cstdio>
+
 namespace vh {
+
+std::string LiveMavlinkOutputAuditLog::format_log() const {
+  std::string out;
+  char line[256];
+  for (const auto& r : records_) {
+    switch (r.kind) {
+      case AuditRecord::Kind::Start:
+        std::snprintf(line, sizeof(line), "audit_event=start reason=%s\n",
+                      r.reason.c_str());
+        break;
+      case AuditRecord::Kind::Decision:
+        std::snprintf(line, sizeof(line),
+                      "audit_event=decision allowed=%s reason=%s valid=%s "
+                      "vx_mps=%g yaw_rate_microradps=%d confidence_mille=%u\n",
+                      r.allowed ? "true" : "false", r.reason.c_str(),
+                      r.command_valid ? "true" : "false",
+                      static_cast<double>(r.vx_mps), r.yaw_rate_microradps,
+                      r.confidence_mille);
+        break;
+      case AuditRecord::Kind::Stop:
+        std::snprintf(line, sizeof(line), "audit_event=stop reason=%s\n",
+                      r.reason.c_str());
+        break;
+    }
+    out += line;
+  }
+  return out;
+}
 
 // --- Audit log --------------------------------------------------------------
 bool LiveMavlinkOutputAuditLog::record_start(const std::string& reason) {
@@ -20,6 +50,8 @@ bool LiveMavlinkOutputAuditLog::record_decision(
   r.reason = decision.allowed ? "allowed"
                               : format_block_reasons(decision.block_reasons);
   r.allowed = decision.allowed;
+  r.command_valid = command.valid;
+  r.vx_mps = command.vx_mps;
   r.yaw_rate_microradps = command.yaw_rate_microradps;
   r.confidence_mille = command.confidence_mille;
   records_.push_back(r);

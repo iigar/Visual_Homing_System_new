@@ -35,6 +35,8 @@ struct AuditRecord {
   std::uint64_t seq = 0;
   std::string reason;  // start/stop reason; decision: block reasons or "allowed"
   bool allowed = false;
+  bool command_valid = false;     // decision: the proposed command's validity
+  float vx_mps = 0.0f;            // decision: forward speed (must be 0 in scope)
   std::int32_t yaw_rate_microradps = 0;
   std::uint16_t confidence_mille = 0;
 };
@@ -67,6 +69,10 @@ class LiveMavlinkOutputAuditLog : public IAuditLog {
   std::size_t size() const noexcept { return records_.size(); }
   const AuditRecord& at(std::size_t i) const noexcept { return records_.at(i); }
   const AuditCounters& counters() const noexcept { return counters_; }
+
+  // Render the whole log as one event per line (for the audit readiness
+  // checker and stored evidence). Stable key=value format.
+  std::string format_log() const;
 
  private:
   bool can_write() const noexcept { return ready_ && !write_should_fail_; }

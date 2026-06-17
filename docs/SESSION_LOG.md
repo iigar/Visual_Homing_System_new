@@ -2,6 +2,26 @@
 
 > Append-only. Новий запис зверху.
 
+## 2026-06-17 — M14 (readiness checkers + evidence)
+
+**Зроблено (гармонізація логу + gate-інтеграція + 2 CLI + 3 checkers + evidence doc; 23/23 CTest зелені):**
+
+| Зміна | Що |
+|-------|-----|
+| `match_session` лог-формат | bool → `true/false` (не 1/0); block reasons → `reason:count` (map). Інтеграція M13 gate: `set_live_output_gate(gate, LiveOutputContext)` — per-frame SafetyGateInputs → real allowed/blocked + reason counts (fallback live_output_disabled без gate) |
+| `live_output` | AuditRecord +command_valid+vx_mps; `format_log()` (one event/line) |
+| `tools/vh_match_session` | +`--readiness` (gate operator-confirmed + disarmed fresh heartbeat → vehicle_not_armed:N) |
+| `tools/vh_live_session` | НОВИЙ — драйвить LiveMavlinkOutputSession → audit log; endpoint→mark_endpoint |
+| `scripts/check-live-readiness-log.sh` | парсить single-line compact log; 12 require (passed=true … vehicle_not_armed:N), expected count param |
+| `scripts/check-live-session-audit-log.sh` | парсить audit log; 1 start, N decisions (allowed=false/vehicle_not_armed/valid=true/vx_mps=0), 1 endpoint stop |
+| `docs/LIVE_OUTPUT_READINESS_RECORD.md` | evidence ledger; 3/3 Pi слоти (M15) + desktop reference |
+
+**Тести:** test_match_session +test_live_output_gate_vehicle_not_armed (11), test_live_output +test_audit_format_log (12). **E2E (150-кадровий self-replay):** readiness log passed=true frames=150/150 … vehicle_not_armed:150; audit log 1 start+150 decisions+1 endpoint stop=152 рядки; **обидва checkers pass exit 0**.
+
+**Рішення:** D-028 (формат true/false; gate-derived чесний vehicle_not_armed; endpoint gate=1000 → endpoint на фінальному кадрі; evidence ≠ дозвіл на live output).
+
+**Наступне:** M15 (3/3 readiness state — потребує Pi: M11 bring-up → route quality_pass → 150/150 dry-run → 3 чисті Pi evidence logs у RECORD.md; CTest на Pi). Live output лишається blocked.
+
 ## 2026-06-17 — M13 (non-live live-output safety scaffolding)
 
 **Зроблено (2 модулі, 2 тести +28 cases; 23/23 CTest desktop зелені). Жодного live output:**

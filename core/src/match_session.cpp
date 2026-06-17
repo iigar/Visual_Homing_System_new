@@ -22,6 +22,12 @@ DryRunMatchSession::DryRunMatchSession(DryRunBridge& bridge,
       base_blocked_stale_(bridge.counters().blocked_stale),
       base_blocked_incompatible_(bridge.counters().blocked_incompatible) {}
 
+void DryRunMatchSession::set_live_output_gate(
+    const LiveMavlinkOutputSafetyGate& gate, LiveOutputContext ctx) noexcept {
+  live_gate_ = &gate;
+  live_ctx_ = ctx;
+}
+
 bool DryRunMatchSession::at_endpoint(std::uint16_t progress_mille) const noexcept {
   if (cfg_.expected_progress == ExpectedProgress::Reverse) {
     const std::uint16_t threshold =
@@ -84,10 +90,31 @@ NavigationCommand DryRunMatchSession::step_match(
     cmd = bridge_.tick(match, base_health, now_ns);
     ++dry_run_total_;
     if (cmd.valid) ++dry_run_valid_;
-    // The live-output boundary is hard-closed (no M13 gate, no M16/M17 writer):
-    // every command that would face it is blocked, never allowed.
-    ++live_output_blocked_;
-    block_reason_recorded_ = true;
+
+    // Live-output boundary accounting. With a safety gate attached we record
+    // the real decision and its explicit reasons; otherwise the boundary is
+    // hard-closed with the placeholder reason. Either way no command is sent.
+    if (live_gate_ != nullptr) {
+      SafetyGateInputs gi;
+      gi.single_writer_owned = live_ctx_.single_writer_owned;
+      gi.audit_ready = live_ctx_.audit_ready;
+      gi.dry_run_quality_passed = cfg_.dry_run_quality_passed;
+      gi.health = base_health;
+      gi.telemetry = bridge_.telemetry();
+      gi.match = match;
+      gi.command = cmd;
+      gi.now_ns = now_ns;
+      const GateDecision gd = live_gate_->evaluate(gi);
+      if (gd.allowed) {
+        ++live_output_allowed_;
+      } else {
+        ++live_output_blocked_;
+        for (const auto& reason : gd.block_reasons) ++live_block_counts_[reason];
+      }
+    } else {
+      ++live_output_blocked_;
+      ++live_block_counts_["live_output_disabled"];
+    }
   }
 
   if (reached_now) {
@@ -159,11 +186,9 @@ MatchSessionResult DryRunMatchSession::finish() noexcept {
   r.dry_run_valid = dry_run_valid_;
   r.dry_run_total = dry_run_total_;
 
-  r.live_output_gate_allowed = 0;
+  r.live_output_gate_allowed = live_output_allowed_;
   r.live_output_gate_blocked = live_output_blocked_;
-  if (live_output_blocked_ > 0) {
-    r.live_output_gate_block_reasons.emplace_back("live_output_disabled");
-  }
+  r.live_output_gate_block_reason_counts = live_block_counts_;
 
   r.stop_reason = stopped_ ? stop_reason_ : "exhausted";
 
@@ -188,31 +213,34 @@ std::string format_compact_log(const MatchSessionResult& r) {
   char fps[32];
   std::snprintf(fps, sizeof(fps), "%.1f", r.effective_fps);
 
+  auto tf = [](bool b) { return b ? "true" : "false"; };
+
+  // reason:count pairs in deterministic (map-sorted) order; "none" if empty.
   std::string reasons;
-  for (const auto& s : r.live_output_gate_block_reasons) {
+  for (const auto& [reason, count] : r.live_output_gate_block_reason_counts) {
     if (!reasons.empty()) reasons += ',';
-    reasons += s;
+    reasons += reason + ':' + std::to_string(count);
   }
   if (reasons.empty()) reasons = "none";
 
   std::snprintf(
       buf, sizeof(buf),
-      "passed=%d frames=%u/%u effective_fps=%s configured_fps=%u elapsed_ms=%lld "
+      "passed=%s frames=%u/%u effective_fps=%s configured_fps=%u elapsed_ms=%lld "
       "valid_matches=%u progress=%u..%u progress_first=%u progress_last=%u "
-      "regressions=%u rollback_total=%llu index_jumps=%u endpoint_passed=%d "
-      "progress_gate_passed=%d confidence_min_avg=%u/%u telemetry_health=%d "
-      "telemetry_dropped=%llu dry_run_quality=%d dry_run_valid=%u/%u "
+      "regressions=%u rollback_total=%llu index_jumps=%u endpoint_passed=%s "
+      "progress_gate_passed=%s confidence_min_avg=%u/%u telemetry_health=%s "
+      "telemetry_dropped=%llu dry_run_quality=%s dry_run_valid=%u/%u "
       "live_output_gate_allowed=%llu live_output_gate_blocked=%llu "
       "live_output_gate_block_reasons=%s stop_reason=%s",
-      r.passed ? 1 : 0, r.frames, r.requested_frames, fps, r.configured_fps,
+      tf(r.passed), r.frames, r.requested_frames, fps, r.configured_fps,
       static_cast<long long>(r.elapsed_ms), r.valid_matches,
       r.progress_min_mille, r.progress_max_mille, r.progress_first_mille,
       r.progress_last_mille, r.progress_regressions,
       static_cast<unsigned long long>(r.rollback_total_mille), r.index_jumps,
-      r.endpoint_passed ? 1 : 0, r.progress_gate_passed ? 1 : 0,
-      r.confidence_min_mille, r.confidence_avg_mille, r.telemetry_health ? 1 : 0,
+      tf(r.endpoint_passed), tf(r.progress_gate_passed), r.confidence_min_mille,
+      r.confidence_avg_mille, tf(r.telemetry_health),
       static_cast<unsigned long long>(r.telemetry_dropped),
-      r.dry_run_quality ? 1 : 0, r.dry_run_valid, r.dry_run_total,
+      tf(r.dry_run_quality), r.dry_run_valid, r.dry_run_total,
       static_cast<unsigned long long>(r.live_output_gate_allowed),
       static_cast<unsigned long long>(r.live_output_gate_blocked),
       reasons.c_str(), r.stop_reason.c_str());

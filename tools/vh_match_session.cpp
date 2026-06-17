@@ -33,13 +33,14 @@
 #include "vh/replay_camera.hpp"
 #include "vh/route_io.hpp"
 #include "vh/route_matcher.hpp"
+#include "vh/safety_gate.hpp"
 
 namespace {
 
-std::vector<std::uint8_t> heartbeat_frame() {
+std::vector<std::uint8_t> heartbeat_frame(bool armed) {
   std::vector<std::uint8_t> p(9, 0);
-  vh::store_le32(p.data(), 5);  // custom_mode LOITER
-  p[6] = 0x80;                  // armed
+  vh::store_le32(p.data(), 5);          // custom_mode LOITER
+  p[6] = armed ? 0x80 : 0x00;           // base_mode armed flag
   std::vector<std::uint8_t> region;
   region.push_back(static_cast<std::uint8_t>(p.size()));
   region.push_back(0);
@@ -69,6 +70,7 @@ int main(int argc, char** argv) {
 
   vh::MatchSessionConfig cfg;
   bool synthetic_hb = false;
+  bool readiness = false;
   std::uint16_t min_conf = 600;
   for (int i = 3; i < argc; ++i) {
     const std::string a = argv[i];
@@ -89,6 +91,12 @@ int main(int argc, char** argv) {
       cfg.dry_run_quality_passed = true;
     } else if (a == "--synthetic-heartbeat") {
       synthetic_hb = true;
+    } else if (a == "--readiness") {
+      // Bench-readiness evidence: attach the real M13 safety gate with operator
+      // authority granted, but a disarmed vehicle (props off) — so every frame
+      // blocks for exactly vehicle_not_armed.
+      readiness = true;
+      cfg.dry_run_quality_passed = true;
     } else {
       std::fprintf(stderr, "unknown option: %s\n", a.c_str());
       return EXIT_FAILURE;
@@ -122,16 +130,37 @@ int main(int argc, char** argv) {
   sink.start();
   vh::DryRunMatchSession session(bridge, cfg, &matcher);
 
+  // Optional live-output safety gate (M13) for bench-readiness evidence.
+  vh::SafetyGateConfig gcfg;
+  gcfg.runtime_enabled = true;
+  gcfg.operator_confirmed = true;
+  gcfg.min_confidence_mille = min_conf;
+  vh::LiveMavlinkOutputSafetyGate gate(gcfg);
+  if (readiness) {
+    vh::LiveOutputContext ctx;
+    ctx.single_writer_owned = true;
+    ctx.audit_ready = true;
+    session.set_live_output_gate(gate, ctx);
+  }
+
+  std::uint64_t seen = 0;
   while (auto frame = camera.next_frame()) {
     const std::int64_t now = frame->timestamp_ns;
-    if (synthetic_hb) {
-      const auto hb = heartbeat_frame();
+    if (readiness) {
+      const auto hb = heartbeat_frame(/*armed=*/false);  // disarmed, fresh
+      bridge.ingest_telemetry(hb.data(), hb.size(), now);
+    } else if (synthetic_hb) {
+      const auto hb = heartbeat_frame(/*armed=*/true);
       bridge.ingest_telemetry(hb.data(), hb.size(), now);
     }
+    ++seen;
     vh::HealthSnapshot h;
     h.state = vh::HealthState::Ready;
     h.camera_ok = true;
     h.navigation_ok = true;
+    h.frames_seen = seen;
+    h.last_frame_timestamp_ns = now;
+    h.frame_age_ns = 0;
     h.now_ns = now;
     session.step(*frame, h, now);
   }

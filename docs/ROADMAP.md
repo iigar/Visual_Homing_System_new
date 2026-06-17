@@ -16,7 +16,7 @@
 - [x] **M11** Pi hardware capture: libcamera (Trixie), build strategy, скрипти — ⚠ Pi-секція не скомпільована (немає Pi); desktop fail-closed зелений
 - [x] **M12** Live route matching dry-run: speed mismatch validation, endpoint action, compact log — DryRunMatchSession + vh_match_session, E2E self-replay passed=1
 - [x] **M13** Safety scaffolding: SafetyGate, AuditLog, Session, watchdog stale-data, blocked bridge stub — 15 gate reasons, fail-closed, нуль transmission
-- [ ] **M14** Readiness checkers: 3 shell checkers, evidence collection
+- [x] **M14** Readiness checkers: 3 shell checkers, evidence collection — log true/false + gate-derived vehicle_not_armed:N, E2E 150/150 both checkers pass
 - [ ] **M15** 3/3 readiness state: повний pre-live evidence
 - [ ] **M16** Live-output PLAN (документ, не код) — після ревью
 - [ ] **M17** Bench props-off writer library + fail-closed wrapper — після ревью
