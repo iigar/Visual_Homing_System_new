@@ -2,23 +2,24 @@
 
 > Перезаписується наприкінці кожної сесії. Ліміт 150 рядків. Журнал — у SESSION_LOG.md.
 
-## Стан: M11 завершено (2026-06-16) — Pi hardware capture (libcamera Trixie)
+## Стан: M12 завершено (2026-06-17) — live route matching dry-run
 
 **Реалізовано:**
-- `vh/pi_camera.{hpp,cpp}` — `PiCameraSource : ICameraSource` (pimpl ховає libcamera з public API)
-  - PiCameraConfig (capture w/h, buffer_count, frame_timeout_ms, camera_index), PiCameraError (11), validate_pi_camera_config (dims∈(0,8192], buffers≥1, timeout>0) — передує compile-гейту
-  - Двійний гейт: (1) compile `VH_ENABLE_LIBCAMERA` (PUBLIC define — умовний pimpl member) — desktop fail-closed stub, `open()`→NotCompiledIn; (2) runtime `open()` acquire+configure R8@capture dims інакше closed, `next_frame()`→nullopt
-  - Pi backend (`#if VH_ENABLE_LIBCAMERA`): CameraManager→acquire→R8 stream→FrameBufferAllocator→Request; async `requestCompleted` → sync `next_frame()` через mutex+cv+черга; mmap-per-fd + row-copy зі `StreamConfiguration::stride`; validate() adjusted ≠ запит → ConfigureFailed
-- CMake: ON → pkg-config libcamera link; OFF → define=0, нуль залежності
-- `scripts/build-test-pi.sh` (build-pi/, libcamera ON, live-output OFF), `scripts/pi-camera-probe.sh` (READ-ONLY camera list)
+- `vh/match_session.{hpp,cpp}` — `DryRunMatchSession` над DryRunBridge (M9)
+  - `step_match(RouteMatch)` (тести) / `step(Frame)` (матчить через matcher M5) → акумуляція evidence
+  - ExpectedProgress any/forward/reverse; progress first/last/min/max; regressions + rollback_total_mille + index_jumps = speed mismatch як явна validation-змінна
+  - Endpoint gate (fwd: progress≥gate; rev: ≤1000−gate) → STOP команд + stop_reason=endpoint_reached, наступні кадри без команд (fail-closed)
+  - live-output межа hard-closed: allowed=0, blocked=N, reason `live_output_disabled`; dry_run_quality (M6) + telemetry health окремі gates
+  - `format_compact_log` (всі поля промпту M12); MatchSessionResult.passed = AND усіх gates
+- `tools/vh_match_session` — route.vhrs + frames.csv → compact log; --expected/--endpoint-gate/--min-confidence/--fps/--quality-pass/--synthetic-heartbeat; exit 0 iff passed
 
-**Тести:** 20 CTest desktop, 100% pass. test_pi_camera (config validation, fail-closed, NotStarted, NotCompiledIn).
+**Тести:** 21 CTest desktop, 100% pass. test_match_session (10 cases). E2E self-replay: passed=1, frames=5/5, progress 0..1000, endpoint_passed=1, live_output_gate_allowed=0/blocked=5.
 
-**⚠ Хвіст:** Pi-секція НЕ компілювалась (немає Pi) — обовʼязково `build-test-pi.sh` на реальному Pi перед M12. libcamera 0.3+ Trixie API підтверджено NotebookLM (formats::R8, plane.fd().get(), stride).
+**Наступна сесія: M13 (non-live live-output safety scaffolding)**
+- `LiveMavlinkOutputSafetyGate`: runtime enable + operator confirm + single-writer + audit ready + dry-run quality + fresh telemetry + valid/fresh/high-conf match + finite bounded command + exact zero forward speed; explicit block reasons
+- Усе ще НЕ live output — це лише gate-логіка (AuditLog/SafetyGate/Session)
 
-**Наступна сесія: M12 (live route matching dry-run)**
-- Speed mismatch validation, endpoint action, compact log
-- Бере кадри з PiCameraSource (capture dims з активного CameraProfile M10) → preprocess → matcher
+**⚠ Хвіст M11:** Pi-секція (`#if VH_ENABLE_LIBCAMERA`) НЕ компільована (немає Pi) — `build-test-pi.sh` на Pi перед польовим використанням
 
 ## Архітектурні константи (не міняти без DECISIONS.md запису)
 
@@ -31,6 +32,7 @@
 - Command boundary fail-closed: DryRunCommandSink stopped-by-default, single-writer (D-022). Bridge накладає telemetry freshness на validity (D-023)
 - Camera profile FOV → rad-per-pixel для matcher; ground footprint/scale mismatch = DIAGNOSTIC ONLY, не впливають на live команди (D-024)
 - Pi capture: двійний гейт (compile VH_ENABLE_LIBCAMERA + runtime open), pimpl, fail-closed; libcamera async→sync ізольовано в backend; VH_ENABLE_LIBCAMERA ≠ live output (D-025)
+- M12 match session: speed mismatch (regressions/rollback/index_jumps) — явна validation-змінна, не діє мовчки; endpoint → STOP команд fail-closed; live-output hard-blocked (allowed=0); dry_run_quality+telemetry окремі gates; матчить кадри ВЖЕ у route dims (preprocess вище) (D-026)
 - VHRS LE через explicit store_le/load_le; digest = FNV-1a 64-bit (non-crypto)
 - Each test = окремий CTest executable
 - Direction shift: positive = live displaced RIGHT vs reference (D-015)

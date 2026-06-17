@@ -2,6 +2,23 @@
 
 > Append-only. Новий запис зверху.
 
+## 2026-06-17 — M12 (live route matching dry-run)
+
+**Зроблено (1 модуль, 1 тест +10 cases, 1 CLI, E2E demo; 21/21 CTest desktop зелені):**
+
+| Компонент | Що |
+|-----------|-----|
+| `match_session.{hpp,cpp}` | `DryRunMatchSession` над DryRunBridge. step_match(RouteMatch)/step(Frame). ExpectedProgress any/forward/reverse. Progress трекінг (first/last/min/max), regressions + rollback_total_mille + index_jumps (speed mismatch як validation-змінна). Endpoint gate → STOP команд + stop_reason=endpoint_reached (fail-closed). live-output hard-blocked (allowed=0, blocked=N, reason live_output_disabled). dry_run_quality + telemetry health окремі gates. `format_compact_log` (всі поля промпту M12). MatchSessionResult.passed = AND усіх gates |
+| `tools/vh_match_session` | route.vhrs + frames.csv → compact log. Опції --expected/--endpoint-gate/--min-confidence/--fps/--quality-pass/--synthetic-heartbeat. exit 0 iff passed |
+
+**Тести (test_match_session):** nominal pass, regression detect (rollback 250), index jump, endpoint stops commands (frame 6 без команди), stale telemetry fail, low confidence fail, invalid match breaks pass, reverse endpoint, dry_run_quality gate, compact log fields.
+
+**E2E demo (WSL):** 5 згенерованих 16×16 кадрів → record 1:1 → self-replay session → `passed=1 frames=5/5 valid_matches=5 progress=0..1000 confidence=1000/1000 endpoint_passed=1 dry_run_valid=5/5 live_output_gate_allowed=0 blocked=5 stop_reason=endpoint_reached` exit=0.
+
+**Рішення:** D-026 (speed mismatch явна змінна; endpoint stop fail-closed; live-output hard-blocked allowed=0; dry_run_quality окремий gate; session матчить кадри вже в route dims — preprocess вище).
+
+**Наступне:** M13 (non-live live-output safety scaffolding — LiveMavlinkOutputSafetyGate: runtime enable + operator confirm + single-writer + audit ready + dry-run quality + fresh telemetry + valid match + bounded command + exact zero forward speed; explicit block reasons).
+
 ## 2026-06-16 — M11 (Pi hardware capture — libcamera Trixie)
 
 **Зроблено (1 модуль pimpl, 1 тест, 2 Pi-скрипти; 20/20 CTest desktop зелені):**
